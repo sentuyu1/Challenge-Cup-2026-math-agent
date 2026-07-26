@@ -28,19 +28,20 @@ user_agent.py — 挑战杯 XH-202627 数学智能体入口
 import re
 import os
 import sys
-import subprocess
 import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 
-# ── Lagent 框架路径（从同级 lagent 目录加载，不使用绝对路径）──
+# ── Lagent 框架路径 ──
 _LAGENT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lagent")
 if os.path.isdir(_LAGENT_DIR):
     sys.path.insert(0, _LAGENT_DIR)
 
 from lagent.agents import Agent
 from lagent.schema import AgentMessage
+
+from utils import extract_code, execute_code, extract_boxed, extract_final_answer, is_correct_vote
 
 
 # ============================================================
@@ -62,6 +63,9 @@ class _PlatformLLMAdapter:
         temperature = kwargs.pop("temperature", self._default_temperature)
         max_tokens = kwargs.pop("max_tokens", self._default_max_tokens)
         return self._client.chat(messages, temperature=temperature, max_tokens=max_tokens)
+
+
+from utils import extract_code, execute_code, extract_boxed, extract_final_answer, is_correct_vote
 
 
 # ============================================================
@@ -104,6 +108,7 @@ _PROMPT_VOTER = (
     "其中 A 表示候选解答正确，B 表示候选解答错误。"
 )
 
+
 _PROMPT_TEACHER = (
     "你是一位优秀的数学教师。请根据前面的解题过程，生成教育启发：\n"
     "## 知识点\n列出核心数学知识点（3-5 个）\n"
@@ -111,67 +116,6 @@ _PROMPT_TEACHER = (
     "## 常见误区\n指出学生容易犯的错误\n"
     "## 拓展思考\n给出一个值得进一步思考的问题"
 )
-
-
-# ============================================================
-# 工具函数
-# ============================================================
-
-def _extract_code(text: str) -> Optional[str]:
-    """提取文本中的第一个 ```python ... ``` 代码块。"""
-    m = re.search(r"```python\s*\n(.*?)```", text, re.DOTALL)
-    return m.group(1) if m else None
-
-
-def _execute_code(code: str, timeout: int = 30) -> str:
-    """在子进程中安全执行 Python 代码，返回 stdout 或 stderr。"""
-    try:
-        r = subprocess.run(
-            [sys.executable, "-c", code],
-            capture_output=True, text=True, timeout=timeout,
-        )
-        return (r.stdout.strip() or r.stderr.strip())
-    except subprocess.TimeoutExpired:
-        return "代码执行超时"
-
-
-def _extract_boxed(text: str) -> str:
-    """从 LaTeX 文本中提取 \\boxed{...} 内的答案。"""
-    m = re.search(r"\\boxed\{(.+?)\}", text)
-    return m.group(1).strip() if m else ""
-
-
-def _is_correct_vote(verdict: str) -> bool:
-    """解析 verifier 的输出，判断投票结果是否为 '正确'（A）。
-
-    兼容多种 VERDICT 格式：
-      - VERDICT: A / VERDICT：B
-      - 单独一行的 A 或 B
-      - CORRECT / INCORRECT
-    """
-    # 查找 VERDICT: A 或 VERDICT：B
-    verdict_matches = re.findall(
-        r"\bVERDICT\s*[:：]\s*([AB])\s*[。.]?",
-        verdict,
-        flags=re.IGNORECASE,
-    )
-    if verdict_matches:
-        return verdict_matches[-1].upper() == "A"
-
-    # 查找单独一行的 A 或 B
-    label_matches = re.findall(
-        r"^\s*([AB])\s*[。.]?\s*$",
-        verdict,
-        flags=re.IGNORECASE | re.MULTILINE,
-    )
-    if label_matches:
-        return label_matches[-1].upper() == "A"
-
-    # 查找 CORRECT / INCORRECT
-    words = re.findall(r"\b[A-Z]+\b", verdict.upper())
-    if "INCORRECT" in words:
-        return False
-    return "CORRECT" in words
 
 
 # ============================================================
@@ -329,11 +273,10 @@ class ReasoningAgent:
                 "content": f"选定最佳候选 (confidence={best['confidence']:.2f}，共 {len(candidates)} 候选)",
             })
 
-            # 从最佳候选中提取 \\boxed{} 答案
-            final_answer = _extract_boxed(best["content"])
+            # 从最佳候选中提取最终答案
+            final_answer = extract_final_answer(best["content"])
             if not final_answer:
-                lines = [l.strip() for l in best["content"].split("\n") if l.strip()]
-                final_answer = lines[-1][:500] if lines else "未能提取答案"
+                final_answer = "未能提取答案"
 
             # ══════════════════════════════════════════════════════
             # ⑤ 教育启发（基于最佳候选）
@@ -445,7 +388,7 @@ class ReasoningAgent:
                 max_tokens=cfg.voter_max_tokens,
             )
             verdict = response.content
-            is_correct = _is_correct_vote(verdict)
+            is_correct = is_correct_vote(verdict)
             votes.append(is_correct)
 
             trace.append({

@@ -10,7 +10,7 @@
 
 使用方法：
 1. 确保已安装 lagent：pip install -e ./lagent
-2. 确保 .env 文件中配置了 INTERN_S1_API_KEY
+2. 确保 .env 文件中配置了 INTERN_API_KEY
 3. 运行：python batch_solver_lagent.py --input sample_problems.json --output results_lagent.json
 """
 
@@ -34,7 +34,7 @@ load_dotenv()
 
 
 # ===================== 配置区域 =====================
-API_KEY = os.environ.get("INTERN_S1_API_KEY")
+API_KEY = os.environ.get("INTERN_API_KEY")
 MODEL = "intern-s2-preview"
 REQUEST_INTERVAL = 2.0  # 限速，避免 API 流控
 MAX_TURNS = 3           # 每道题最多几轮思考-执行循环
@@ -64,7 +64,7 @@ class InternS1API(GPTAPI):
 def create_math_agent():
     """创建数学解题 Agent。"""
     if not API_KEY:
-        raise ValueError("请先配置 INTERN_S1_API_KEY")
+        raise ValueError("请先配置 INTERN_API_KEY")
 
     llm = InternS1API(
         api_key=API_KEY,

@@ -7,14 +7,15 @@
 3. 解析模型输出中的答案
 4. 保存为比赛要求的 JSON 结果格式
 5. 支持断点续跑（中途失败可以从上次位置继续）
-6. 自动限速，避免触发 API 流控
+6. 支持并发调用（默认 8 路） + 自动限速
 
 使用方法：
-1. 确保 .env 文件中配置了 INTERN_S1_API_KEY
+1. 确保 .env 文件中配置了 INTERN_API_KEY
 2. 准备好题目文件（如 sample_problems.json）
 3. 运行：python batch_solver.py --input sample_problems.json --output results.json
 """
 
+import asyncio
 import os
 import json
 import time
@@ -31,12 +32,13 @@ load_dotenv()
 
 
 # ===================== 配置区域 =====================
-API_KEY = os.environ.get("INTERN_S1_API_KEY")
+API_KEY = os.environ.get("INTERN_API_KEY")
 BASE_URL = "https://chat.intern-ai.org.cn/api/v1/"
 MODEL = "intern-s2-preview"  # 默认使用 S2 以获得最佳数学推理能力
 
-# API 流控：默认每分钟 30 次，所以每次请求间隔至少 2 秒
-REQUEST_INTERVAL = 2.0
+# 并发控制（对齐 baseline）
+LOCAL_MAX_CONCURRENCY = int(os.environ.get("LOCAL_MAX_CONCURRENCY", "8"))
+REQUEST_INTERVAL = 0.5  # 并发模式下缩短间隔，主要靠 semaphore 控制
 MAX_RETRIES = 3
 
 SYSTEM_PROMPT = """你是一名数学解题专家。请按以下步骤解决题目：
@@ -56,7 +58,7 @@ SYSTEM_PROMPT = """你是一名数学解题专家。请按以下步骤解决题�
 def create_client():
     """创建 OpenAI 客户端。"""
     if not API_KEY:
-        raise ValueError("请先配置 INTERN_S1_API_KEY 环境变量或在 .env 文件中设置")
+        raise ValueError("请先配置 INTERN_API_KEY 环境变量或在 .env 文件中设置")
     return OpenAI(api_key=API_KEY, base_url=BASE_URL)
 
 
@@ -166,11 +168,13 @@ def main():
     parser.add_argument("--input", default="sample_problems.json", help="输入题目文件路径")
     parser.add_argument("--output", default="results.json", help="输出结果文件路径")
     parser.add_argument("--start", type=int, default=0, help="从第几题开始（从0计数）")
+    parser.add_argument("--concurrency", type=int, default=LOCAL_MAX_CONCURRENCY, help="并发数")
     args = parser.parse_args()
 
     print(f"开始时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"输入文件：{args.input}")
     print(f"输出文件：{args.output}")
+    print(f"并发数：{args.concurrency}")
 
     # 读取题目
     problems = load_problems(args.input)
@@ -185,50 +189,48 @@ def main():
     # 创建客户端
     client = create_client()
 
-    # 批量解题
-    for idx, problem in enumerate(problems):
-        if idx < args.start:
-            continue
+    # ── 异步并发主循环 ──
+    semaphore = asyncio.Semaphore(args.concurrency)
 
+    async def process_one(idx: int, problem: dict):
         problem_id = problem.get("id", f"prob_{idx:03d}")
 
         if problem_id in completed_ids:
             print(f"[{idx+1}/{total}] {problem_id} 已存在，跳过")
-            continue
+            return
 
-        print(f"\n[{idx+1}/{total}] 正在解答：{problem_id}")
-        problem_text = problem.get("problem", "")
+        async with semaphore:
+            print(f"\n[{idx+1}/{total}] 正在解答：{problem_id}")
+            problem_text = problem.get("problem", "")
 
-        result = solve_one_problem(client, problem_text)
+            result = await asyncio.to_thread(solve_one_problem, client, problem_text)
 
-        record = {
-            "idx": idx,
-            "status": "success" if result["success"] else "error",
-            "final_response": result["answer"],
-            "trace": [{"step": "reasoning", "content": result["reasoning"]}],
-            "domain": problem.get("domain", ""),
-            "error": result["error"] or None,
-            "timestamp": datetime.now().isoformat(),
-        }
-        if result["error"]:
-            record["error"] = {"type": "APIError", "message": result["error"]}
+            record = {
+                "idx": idx,
+                "status": "success" if result["success"] else "error",
+                "final_response": result["answer"],
+                "trace": [{"step": "reasoning", "content": result["reasoning"]}],
+                "domain": problem.get("domain", ""),
+                "error": result["error"] or None,
+                "timestamp": datetime.now().isoformat(),
+            }
+            if result["error"]:
+                record["error"] = {"type": "APIError", "message": result["error"]}
 
-        results.append(record)
-        completed_ids.add(problem_id)
+            results.append(record)
+            completed_ids.add(problem_id)
 
-        # 每道题后立即保存，防止中断丢失进度
-        save_results(results, args.output)
+            # 每道题后保存
+            await asyncio.to_thread(save_results, results, args.output)
 
-        print(f"  状态：{'成功' if result['success'] else '失败'}")
-        print(f"  答案：{result['answer'][:100]}...")
+            print(f"  状态：{'成功' if result['success'] else '失败'}")
+            print(f"  答案：{result['answer'][:100]}...")
 
-        # 限速：除了最后一题都等待
-        if idx < total - 1:
-            time.sleep(REQUEST_INTERVAL)
+    async def run_all():
+        tasks = [process_one(idx, p) for idx, p in enumerate(problems) if idx >= args.start]
+        await asyncio.gather(*tasks)
 
-    print(f"\n完成时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"结果已保存到：{args.output}")
-    print(f"成功：{sum(1 for r in results if r['success'])}/{total}")
+    asyncio.run(run_all())
 
 
 if __name__ == "__main__":

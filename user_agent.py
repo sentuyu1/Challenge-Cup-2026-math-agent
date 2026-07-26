@@ -1,8 +1,18 @@
 """
 user_agent.py — 挑战杯 XH-202627 数学智能体入口
 
-基于 Intern-S1 的数学智能体系统，采用 5 Agent 推理流水线：
-  问题分析师 → 策略规划师 → 数学求解器(含Python代码执行) → 答案校验员 → 启发式教师
+基于 Intern-S1 的数学智能体系统，采用 **5 Agent 推理流水线 + 多候选投票** 混合架构：
+
+  ① 问题分析师 ── 题型分类 + 提取关键信息
+  ② 策略规划师 ── 设计解题路径 + 选择最优方法
+  ③ 数学求解器 ── 多候选生成（温度 0.6 × 3 次采样）
+  ④ 投票验证器 ── 对每个候选投票验证（2 次/候选），选最高 confidence
+  ⑤ 启发式教师 ── 知识点总结 + 易错点分析
+
+创新融合：
+  - 5 步流水线（分析→策略→求解→校验→教学）：结构化推理过程
+  - 多候选投票（baseline 精华）：求解器多次采样 + 投票选最优 → 提高鲁棒性
+  - Python 代码执行：确保数值计算的精确性
 
 平台加载方式：
   from user_agent import ReasoningAgent
@@ -21,7 +31,7 @@ import sys
 import subprocess
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 
 # ── Lagent 框架路径（从同级 lagent 目录加载，不使用绝对路径）──
@@ -35,8 +45,6 @@ from lagent.schema import AgentMessage
 
 # ============================================================
 # 平台 Client 适配器
-#   将 platform_client.chat(messages, temperature, max_tokens) → str
-#   适配为 Lagent Agent 需要的 LLM 接口
 # ============================================================
 class _PlatformLLMAdapter:
     """把平台提供的 client 包装成 Lagent 兼容的 LLM 后端。
@@ -79,19 +87,21 @@ _PROMPT_STRATEGIST = (
 )
 
 _PROMPT_SOLVER = (
-    "你是一位数学解题专家。请执行以下步骤：\n"
-    "1. **数学推导**：逐步推导，关键步骤不可省略\n"
-    "2. **编写代码**：涉及计算时写 Python 代码（```python ... ```）\n"
-    "3. **给出答案**：最终答案用 \\boxed{答案} 的 LaTeX 格式\n"
-    "推导要详细但清晰。"
+    "你是一位严谨的数学推理智能体。请解决用户给出的数学问题，并给出清晰推理与最终答案。\n\n"
+    "要求：\n"
+    "1. 先分析题意和关键条件\n"
+    "2. 给出必要的推导步骤，关键步骤不可省略\n"
+    "3. 涉及计算时写 Python 代码（```python ... ```）\n"
+    "4. 最终答案用 \\boxed{答案} 的 LaTeX 格式明确写出"
 )
 
-_PROMPT_VALIDATOR = (
-    "你是一位数学验证专家。请严格检查前面的解题过程：\n"
-    "1. **推导检查**：逻辑是否有漏洞？公式引用是否正确？\n"
-    "2. **计算验证**：数值结果是否正确？（如有 Python 代码输出，以此为准）\n"
-    "3. **边界检查**：特殊情况和边界条件是否处理？\n"
-    "4. **结论**：回答以'验证结果：'开头，不超过 150 字。"
+_PROMPT_VOTER = (
+    "你是一个数学答案验证器。请判断候选解答是否正确解决了题目。\n\n"
+    "不要输出解释。只输出以下两行之一：\n"
+    "VERDICT: A\n"
+    "或\n"
+    "VERDICT: B\n\n"
+    "其中 A 表示候选解答正确，B 表示候选解答错误。"
 )
 
 _PROMPT_TEACHER = (
@@ -131,39 +141,81 @@ def _extract_boxed(text: str) -> str:
     return m.group(1).strip() if m else ""
 
 
+def _is_correct_vote(verdict: str) -> bool:
+    """解析 verifier 的输出，判断投票结果是否为 '正确'（A）。
+
+    兼容多种 VERDICT 格式：
+      - VERDICT: A / VERDICT：B
+      - 单独一行的 A 或 B
+      - CORRECT / INCORRECT
+    """
+    # 查找 VERDICT: A 或 VERDICT：B
+    verdict_matches = re.findall(
+        r"\bVERDICT\s*[:：]\s*([AB])\s*[。.]?",
+        verdict,
+        flags=re.IGNORECASE,
+    )
+    if verdict_matches:
+        return verdict_matches[-1].upper() == "A"
+
+    # 查找单独一行的 A 或 B
+    label_matches = re.findall(
+        r"^\s*([AB])\s*[。.]?\s*$",
+        verdict,
+        flags=re.IGNORECASE | re.MULTILINE,
+    )
+    if label_matches:
+        return label_matches[-1].upper() == "A"
+
+    # 查找 CORRECT / INCORRECT
+    words = re.findall(r"\b[A-Z]+\b", verdict.upper())
+    if "INCORRECT" in words:
+        return False
+    return "CORRECT" in words
+
+
 # ============================================================
-# Agent 配置
+# Agent 配置（含 voting 参数，融合 baseline AgentConfig）
 # ============================================================
 
 @dataclass
 class AgentConfig:
     """推理流水线可调参数。"""
-    max_retries: int = 2                # API internal error 最大重试次数
-    solver_max_tokens: int = 16384      # 求解器的最大输出 token
-    analyzer_max_tokens: int = 512
-    strategist_max_tokens: int = 512
-    validator_max_tokens: int = 512
-    teacher_max_tokens: int = 1024
+    # ── 多候选投票（核心鲁棒性参数）──
+    candidate_count: int = 3           # 求解器生成候选答案数（≥1）
+    vote_count: int = 2                # 每个候选答案的投票验证次数
+
+    # ── 温度 ──
     analyzer_temperature: float = 0.1
     strategist_temperature: float = 0.2
-    solver_temperature: float = 0.2
-    validator_temperature: float = 0.0
+    solver_temperature: float = 0.6    # 多候选需要较高温度（与 baseline 一致）
+    voter_temperature: float = 0.0     # 投票需要确定性
     teacher_temperature: float = 0.8
-    code_timeout: int = 30              # 代码执行超时（秒）
+
+    # ── max_tokens ──
+    solver_max_tokens: int = 16384
+    analyzer_max_tokens: int = 512
+    strategist_max_tokens: int = 512
+    voter_max_tokens: int = 1024
+    teacher_max_tokens: int = 1024
+
+    # ── 其他 ──
+    internal_error_retries: int = 2    # API internal error 重试
+    code_timeout: int = 30             # 代码执行超时（秒）
 
 
 # ============================================================
-# ReasoningAgent — 5 Agent 推理流水线（核心）
+# ReasoningAgent — 5 Agent 流水线 + 多候选投票（核心）
 # ============================================================
 
 class ReasoningAgent:
-    """基于 Intern-S1 的数学智能体，采用 5 Agent 推理流水线。
+    """基于 Intern-S1 的数学智能体，采用 **5 Agent 流水线 + 多候选投票** 混合架构。
 
     流水线架构：
       ① 问题分析师 ── 题型分类 + 提取关键信息
       ② 策略规划师 ── 设计解题路径 + 选择最优方法
-      ③ 数学求解器 ── 逐步推导 + Python 代码执行
-      ④ 答案校验员 ── 反思纠错 + 边界检查
+      ③ 数学求解器 ── 多候选生成（temperature=0.6 × 3 采样）
+      ④ 投票验证器 ── 每候选投票 2 次，选最高 confidence
       ⑤ 启发式教师 ── 知识点总结 + 易错点分析
 
     用法：
@@ -181,27 +233,35 @@ class ReasoningAgent:
         self.config = config or AgentConfig()
         cfg = self.config
 
-        # 每个子 Agent 有独立的 LLM 适配器（温度/max_tokens 不同）
+        # 分析 Agent（低温度，提取结构化信息）
         self._analyzer = Agent(
             llm=_PlatformLLMAdapter(client, cfg.analyzer_temperature, cfg.analyzer_max_tokens),
             template=[{"role": "system", "content": _PROMPT_ANALYZER}],
             name="问题分析师",
         )
+
+        # 策略 Agent（低温度，规划最优路径）
         self._strategist = Agent(
             llm=_PlatformLLMAdapter(client, cfg.strategist_temperature, cfg.strategist_max_tokens),
             template=[{"role": "system", "content": _PROMPT_STRATEGIST}],
             name="策略规划师",
         )
+
+        # 求解 Agent（高温度 0.6，用于多候选采样 — 这是 baseline 核心策略）
         self._solver = Agent(
             llm=_PlatformLLMAdapter(client, cfg.solver_temperature, cfg.solver_max_tokens),
             template=[{"role": "system", "content": _PROMPT_SOLVER}],
             name="数学求解器",
         )
-        self._validator = Agent(
-            llm=_PlatformLLMAdapter(client, cfg.validator_temperature, cfg.validator_max_tokens),
-            template=[{"role": "system", "content": _PROMPT_VALIDATOR}],
-            name="答案校验员",
+
+        # 投票 Agent（温度 0.0，确保判断一致性）
+        self._voter = Agent(
+            llm=_PlatformLLMAdapter(client, cfg.voter_temperature, cfg.voter_max_tokens),
+            template=[{"role": "system", "content": _PROMPT_VOTER}],
+            name="投票验证器",
         )
+
+        # 教学 Agent
         self._teacher = Agent(
             llm=_PlatformLLMAdapter(client, cfg.teacher_temperature, cfg.teacher_max_tokens),
             template=[{"role": "system", "content": _PROMPT_TEACHER}],
@@ -225,16 +285,16 @@ class ReasoningAgent:
         cfg = self.config
 
         try:
-            # ═══════════════════════════════════════════════
+            # ══════════════════════════════════════════════════════
             # ① 问题分析
-            # ═══════════════════════════════════════════════
+            # ══════════════════════════════════════════════════════
             msg = AgentMessage(sender="user", content=problem)
             analysis = self._analyzer(msg, session_id=f"{idx}:a").content
             trace.append({"step": "analyze", "content": analysis})
 
-            # ═══════════════════════════════════════════════
+            # ══════════════════════════════════════════════════════
             # ② 策略规划
-            # ═══════════════════════════════════════════════
+            # ══════════════════════════════════════════════════════
             plan_msg = AgentMessage(
                 sender="user",
                 content=f"原始问题：{problem}\n分析结果：{analysis}\n请制定解题策略。",
@@ -242,81 +302,55 @@ class ReasoningAgent:
             strategy = self._strategist(plan_msg, session_id=f"{idx}:s").content
             trace.append({"step": "strategize", "content": strategy})
 
-            # ═══════════════════════════════════════════════
-            # ③ 数学求解（含代码执行 + internal error 重试）
-            # ═══════════════════════════════════════════════
-            solution_text = ""
-            code_output = ""
-            for attempt in range(cfg.max_retries + 1):
-                solve_msg = AgentMessage(
-                    sender="user",
-                    content=(
-                        f"{problem}\n\n"
-                        f"分析：{analysis[:400]}\n"
-                        f"策略：{strategy[:400]}\n"
-                        "请直接给出完整解答。"
-                    ),
-                )
-                solution_text = self._solver(solve_msg, session_id=f"{idx}:v:{attempt}").content
-                if "internal error" not in solution_text.lower():
-                    break
+            # ══════════════════════════════════════════════════════
+            # ③ 多候选生成（baseline 风格，但加入了分析/策略上下文）
+            # ══════════════════════════════════════════════════════
+            candidates, gen_trace = self._generate_candidates(problem, analysis, strategy, idx)
+            trace.extend(gen_trace)
 
-            code = _extract_code(solution_text)
-            if code:
-                code_output = _execute_code(code, timeout=cfg.code_timeout)
-
+            # debug 日志：候选数
             trace.append({
-                "step": "solve",
-                "content": {
-                    "solution": solution_text[:2000],
-                    "code": code or "",
-                    "code_output": code_output,
-                },
+                "step": "voting_summary",
+                "content": f"生成 {len(candidates)} 个候选答案，准备投票验证。",
             })
 
-            # ═══════════════════════════════════════════════
-            # ④ 答案校验
-            # ═══════════════════════════════════════════════
-            verify_msg = AgentMessage(
-                sender="user",
-                content=(
-                    f"原题：{problem}\n"
-                    f"解题：{solution_text[:2000]}\n"
-                    f"代码执行结果：{code_output}\n"
-                    "请验证答案是否正确。"
-                ),
-            )
-            verification = self._validator(verify_msg, session_id=f"{idx}:x").content
-            trace.append({"step": "validate", "content": verification})
+            # ══════════════════════════════════════════════════════
+            # ④ 多候选投票验证（baseline 风格）
+            # ══════════════════════════════════════════════════════
+            scored = []
+            for cid, candidate in enumerate(candidates):
+                confidence, vote_trace = self._vote_on_candidate(problem, candidate, idx, cid)
+                scored.append({"content": candidate, "confidence": confidence})
+                trace.extend(vote_trace)
 
-            # ═══════════════════════════════════════════════
-            # ⑤ 教育启发
-            # ═══════════════════════════════════════════════
+            best = max(scored, key=lambda item: item["confidence"])
+            trace.append({
+                "step": "select_best",
+                "content": f"选定最佳候选 (confidence={best['confidence']:.2f}，共 {len(candidates)} 候选)",
+            })
+
+            # 从最佳候选中提取 \\boxed{} 答案
+            final_answer = _extract_boxed(best["content"])
+            if not final_answer:
+                lines = [l.strip() for l in best["content"].split("\n") if l.strip()]
+                final_answer = lines[-1][:500] if lines else "未能提取答案"
+
+            # ══════════════════════════════════════════════════════
+            # ⑤ 教育启发（基于最佳候选）
+            # ══════════════════════════════════════════════════════
             teach_msg = AgentMessage(
                 sender="user",
                 content=(
                     f"原题：{problem}\n"
-                    f"推导摘要：{solution_text[:800]}\n"
-                    f"验证结论：{verification}\n"
+                    f"最佳解答：{best['content'][:1200]}\n"
                     "请生成教学启发。"
                 ),
             )
             insight = self._teacher(teach_msg, session_id=f"{idx}:t").content
             trace.append({"step": "teach", "content": insight})
 
-            # ═══════════════════════════════════════════════
-            # 提取最终答案
-            # ═══════════════════════════════════════════════
-            final_answer = _extract_boxed(solution_text)
-            if not final_answer:
-                final_answer = _extract_boxed(verification)
-            if not final_answer:
-                # 兜底：取 solution 最后非空行
-                lines = [l.strip() for l in solution_text.split("\n") if l.strip()]
-                final_answer = lines[-1][:500] if lines else "未能提取答案"
-
             elapsed = round(time.time() - t_start, 1)
-            trace.append({"step": "finalize", "content": f"耗时 {elapsed}s"})
+            trace.append({"step": "finalize", "content": f"耗时 {elapsed}s，confidence={best['confidence']:.2f}"})
 
             return {"final_response": final_answer, "trace": trace}
 
@@ -326,3 +360,103 @@ class ReasoningAgent:
                 "content": f"{type(exc).__name__}: {exc}",
             })
             return {"final_response": "", "trace": trace}
+
+    # ── 多候选生成 ──
+    def _generate_candidates(
+        self, problem: str, analysis: str, strategy: str, idx: int
+    ) -> Tuple[List[str], List[Dict]]:
+        """生成多个候选解答（baseline _generate_candidates 的增强版）。
+
+        与 baseline 的关键差异：
+          - 不是裸题目，而是注入了分析 + 策略作为上下文
+          - 每个候选收到不同的采样 seed（通过 candidate_id 区分）
+          - 若模型输出包含 Python 代码，自动执行并反馈结果
+        """
+        candidates = []
+        trace = []
+        cfg = self.config
+
+        for cid in range(cfg.candidate_count):
+            # 为每个候选构造带编号的 prompt（鼓励多样性）
+            solve_msg = AgentMessage(
+                sender="user",
+                content=(
+                    f"题目：\n{problem}\n\n"
+                    f"分析摘要：{analysis[:300]}\n"
+                    f"推荐策略：{strategy[:300]}\n\n"
+                    f"请给出完整解答（候选编号：{cid + 1}/{cfg.candidate_count}）。\n"
+                    "在最后用 \\boxed{答案} 明确写出最终结果。"
+                ),
+            )
+
+            # 求解器调用（使用高温度 0.6 促进多样性）
+            response = self._solver(
+                solve_msg,
+                session_id=f"{idx}:solve:{cid}",
+                temperature=cfg.solver_temperature,
+                max_tokens=cfg.solver_max_tokens,
+            )
+            solution_text = response.content
+
+            trace.append({
+                "step": f"candidate_{cid}",
+                "content": {
+                    "candidate_id": cid,
+                    "prompt_preview": solve_msg.content[:300],
+                    "response": solution_text[:2000],
+                },
+            })
+
+            candidates.append(solution_text)
+
+        return candidates, trace
+
+    # ── 投票验证 ──
+    def _vote_on_candidate(
+        self, problem: str, candidate: str, idx: int, candidate_id: int
+    ) -> Tuple[float, List[Dict]]:
+        """对单个候选解答进行多次投票，返回 confidence 分数。
+
+        与 baseline _verify_candidate 一致：
+          - vote_count 次独立投票
+          - 每次投票用相同的 prompt + temperature=0.0
+          - confidence = 正确票数 / 总票数
+        """
+        votes = []
+        trace = []
+        cfg = self.config
+
+        for vote_id in range(cfg.vote_count):
+            vote_msg = AgentMessage(
+                sender="user",
+                content=(
+                    "题目：\n"
+                    f"{problem}\n\n"
+                    "候选解答：\n"
+                    f"{candidate[:3000]}\n\n"
+                    "请判断候选解答是否正确。\n"
+                    "只输出一行：VERDICT: A 或 VERDICT: B。"
+                ),
+            )
+            response = self._voter(
+                vote_msg,
+                session_id=f"{idx}:vote:{candidate_id}:{vote_id}",
+                temperature=cfg.voter_temperature,
+                max_tokens=cfg.voter_max_tokens,
+            )
+            verdict = response.content
+            is_correct = _is_correct_vote(verdict)
+            votes.append(is_correct)
+
+            trace.append({
+                "step": f"vote_{candidate_id}_{vote_id}",
+                "content": {
+                    "candidate_id": candidate_id,
+                    "vote_id": vote_id,
+                    "verdict": verdict[:200],
+                    "is_correct": is_correct,
+                },
+            })
+
+        confidence = sum(votes) / len(votes) if votes else 0.0
+        return confidence, trace

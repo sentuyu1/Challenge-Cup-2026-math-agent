@@ -1,16 +1,33 @@
 # 挑战杯 XH-202627 — 数学智能体项目依赖
 # 安装：pip install -r requirements.txt
 #
-# 注意：Lagent 已作为 git subdir 包含在项目内，
-# 如果 lagent/ 目录不存在，请执行：
+# Lagent 框架作为 git subdir 包含在 lagent/ 目录下，
+# 平台安装时会自动从该目录安装。
+
+# ── Lagent 框架（锁定版本，从本地子目录安装）──
+# 这是 baseline 锁定的 commit: 0ab2e2f550477884743cd63fbca7bc4aa7b00290
+# 如 lagent/ 目录不存在，请执行:
 #   git clone https://github.com/InternLM/lagent.git
+#   cd lagent && git checkout 0ab2e2f550477884743cd63fbca7bc4aa7b00290
 
-# ── 大模型 API ──
+# ── Lagent 运行时依赖 ──
+aiohttp
+asyncache
+asyncer
+jupyter==1.0.0
+jupyter_client==8.6.2
+jupyter_core==5.7.2
 openai>=1.0.0
+pydantic
+ray
 requests>=2.31.0
-
-# ── 环境变量 ──
-python-dotenv>=1.0.0
+tenacity
+termcolor
+tiktoken
+typing-extensions
+func_timeout
+distro
+filelock
 
 # ── 数学计算 ──
 numpy>=1.24.0
@@ -20,5 +37,8 @@ scipy>=1.10.0
 # ── 数据处理 ──
 pandas>=2.0.0
 
-# ── Web Demo（可选） ──
+# ── 环境变量管理 ──
+python-dotenv>=1.0.0
+
+# ── Web Demo（可选）──
 # gradio>=4.0.0

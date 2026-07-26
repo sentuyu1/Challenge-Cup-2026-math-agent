@@ -35,7 +35,7 @@ load_dotenv()
 
 # ===================== 配置区域 =====================
 API_KEY = os.environ.get("INTERN_S1_API_KEY")
-MODEL = "intern-s1"
+MODEL = "intern-s2-preview"
 REQUEST_INTERVAL = 2.0  # 限速，避免 API 流控
 MAX_TURNS = 3           # 每道题最多几轮思考-执行循环
 
@@ -51,7 +51,7 @@ SYSTEM_PROMPT = """你是一名数学解题专家。请按以下步骤解决题�
 class InternS1API(GPTAPI):
     """封装 Intern-S1 API。"""
 
-    def __init__(self, api_key, model="intern-s1", **kwargs):
+    def __init__(self, api_key, model="intern-s2-preview", **kwargs):
         super().__init__(
             model_type=model,
             key=api_key,

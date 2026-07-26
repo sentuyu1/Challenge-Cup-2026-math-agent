@@ -33,7 +33,7 @@ load_dotenv()
 # ===================== 配置区域 =====================
 API_KEY = os.environ.get("INTERN_S1_API_KEY")
 BASE_URL = "https://chat.intern-ai.org.cn/api/v1/"
-MODEL = "intern-s1"  # 可换成 intern-s1-pro / intern-s1-mini
+MODEL = "intern-s2-preview"  # 默认使用 S2 以获得最佳数学推理能力
 
 # API 流控：默认每分钟 30 次，所以每次请求间隔至少 2 秒
 REQUEST_INTERVAL = 2.0

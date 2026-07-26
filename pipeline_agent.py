@@ -62,7 +62,7 @@ from lagent.llms import GPTAPI
 class InternS1API(GPTAPI):
     """Intern-S1 书生模型，通过 OpenAI 兼容接口访问。"""
 
-    def __init__(self, api_key: str, model: str = "intern-s1", max_new_tokens: int = 4096, **kwargs):
+    def __init__(self, api_key: str, model: str = "intern-s2-preview", max_new_tokens: int = 4096, **kwargs):
         super().__init__(
             model_type=model,
             key=api_key,

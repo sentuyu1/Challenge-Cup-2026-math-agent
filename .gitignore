@@ -1,6 +1,4 @@
 # Intern-S1 数学智能体系统
-# Lagent 框架
-lagent/
 
 # Python
 __pycache__/
@@ -21,6 +19,12 @@ my_results.json
 # 环境变量（含 API 密钥）
 .env
 
+# Lagent egg-info 缓存（源码保留，只排除构建产物）
+lagent/**/__pycache__/
+lagent/**/*.pyc
+lagent/**/*.pyo
+lagent/*.egg-info/
+lagent/.eggs/
+
 # 临时文件
 *.log
-__pycache__

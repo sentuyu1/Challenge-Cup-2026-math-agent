@@ -40,7 +40,7 @@ from lagent.llms import GPTAPI
 class InternS1API(GPTAPI):
     """Lagent 可调用的 Intern-S1 模型（书生 API）。"""
 
-    def __init__(self, api_key, model="intern-s1", **kwargs):
+    def __init__(self, api_key, model="intern-s2-preview", **kwargs):
         super().__init__(
             model_type=model,
             key=api_key,
@@ -58,7 +58,7 @@ def _get_api_key():
 
 llm = InternS1API(
     api_key=_get_api_key(),
-    model="intern-s1",
+    model="intern-s2-preview",
     max_new_tokens=4096,
     temperature=0.2,
 )

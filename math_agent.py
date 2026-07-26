@@ -60,7 +60,7 @@ class InternS1API(GPTAPI):
     文档: https://internlm.intern-ai.org.cn/api/document
     """
 
-    def __init__(self, api_key: str, model: str = "intern-s1", **kwargs):
+    def __init__(self, api_key: str, model: str = "intern-s2-preview", **kwargs):
         super().__init__(
             model_type=model,
             key=api_key,
@@ -164,7 +164,7 @@ class MathAgent:
         print(result["final_response"])
     """
 
-    def __init__(self, client=None, api_key: str = None, model: str = "intern-s1"):
+    def __init__(self, client=None, api_key: str = None, model: str = "intern-s2-preview"):
         if client is not None:
             # 平台注入模式：把 client 包装为 Lagent LLM
             self.llm = _ClientAdapter(client)

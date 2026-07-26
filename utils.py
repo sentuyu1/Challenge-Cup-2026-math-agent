@@ -22,12 +22,12 @@ from typing import Optional
 def extract_code(text: str) -> Optional[str]:
     """提取文本中第一个 ```python ... ``` 代码块。"""
     m = re.search(r"```python\s*\n(.*?)```", text, re.DOTALL)
-    return m.group(1) if m else None
+    return m.group(1).rstrip('\n') if m else None
 
 
 def extract_code_blocks(text: str) -> list:
     """提取文本中所有 ```python ... ``` 代码块。"""
-    return re.findall(r"```python\s*\n(.*?)```", text, re.DOTALL)
+    return [code.rstrip('\n') for code in re.findall(r"```python\s*\n(.*?)```", text, re.DOTALL)]
 
 
 def execute_code(code: str, timeout: int = 30) -> str:

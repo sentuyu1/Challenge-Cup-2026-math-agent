@@ -1,0 +1,20 @@
+[
+  {"id": "pde", "domain": "偏微分方程", "problem": "求解一维热传导方程 u_t = u_xx, x∈[0,π], t>0，边界 u(0,t)=u(π,t)=0，初始 u(x,0)=sin(x)。求 u(x,t)。"},
+  {"id": "complex", "domain": "复分析", "problem": "计算复积分 ∮_{|z|=2} (e^z / (z-1)^2) dz，逆时针方向，给出精确值。"},
+  {"id": "topology", "domain": "拓扑学", "problem": "证明：在 Hausdorff 空间中，紧致子集一定是闭集。"},
+  {"id": "optimization", "domain": "运筹学", "problem": "用单纯形法求 max z = 2x₁ + 3x₂，约束: x₁+2x₂≤8, 4x₁+x₂≤16, x₁,x₂≥0。"},
+  {"id": "real_analysis", "domain": "实分析", "problem": "判断函数列 f_n(x)=x^n/(1+x^n) 在 [0,1] 上是否一致收敛。证明你的结论。"},
+  {"id": "linear_algebra", "domain": "线性代数", "problem": "求矩阵 [[3,1,1],[1,3,1],[1,1,3]] 的特征值和对应的特征向量。"},
+  {"id": "abstract_algebra", "domain": "抽象代数", "problem": "在群 Z_8（模 8 加法群）中，求元素 2 的阶，并写出由 2 生成的子群。"},
+  {"id": "probability", "domain": "概率论", "problem": "设 X~N(0,1)，求 P(|X|>1.96) 的近似值，并解释其统计意义。"},
+  {"id": "statistics", "domain": "数理统计", "problem": "给定样本 5,7,8,6,9,7,10，求样本均值和样本方差（无偏估计）。"},
+  {"id": "numerical", "domain": "数值分析", "problem": "用牛顿迭代法求 √7 的近似值，初值 x₀=3，迭代 2 步，给出每一步的近似值。"},
+  {"id": "diff_geo", "domain": "微分几何", "problem": "求平面曲线 y=x³ 在点 (1,1) 处的曲率。"},
+  {"id": "number_theory", "domain": "数论", "problem": "解同余方程：x ≡ 2 mod 3, x ≡ 3 mod 5, x ≡ 2 mod 7。用中国剩余定理求最小正整数解。"},
+  {"id": "combinatorics", "domain": "组合数学", "problem": "将 7 个相同的球放入 3 个不同的盒子，每个盒子至少放 1 个球。有多少种放法？"},
+  {"id": "graph_theory", "domain": "图论", "problem": "一棵树有 8 个顶点。证明：这棵树至少有 2 个叶子节点（度数为 1 的顶点）。"},
+  {"id": "logic", "domain": "数理逻辑", "problem": "判断 (P→Q)∧(Q→R) → (P→R) 是否为永真式。用真值表或等价变换证明。"},
+  {"id": "ode", "domain": "常微分方程", "problem": "求解 dy/dx + 2xy = x，初始条件 y(0)=1。"},
+  {"id": "functional", "domain": "泛函分析", "problem": "在 C[0,1] 空间中，证明线性泛函 φ(f) = ∫₀¹ f(x)x dx 是有界的，并求其范数 ||φ||。"},
+  {"id": "discrete_math", "domain": "离散数学", "problem": "集合 A={1,2,3,4} 上有多少个不同的等价关系？提示：等价关系与划分一一对应。"}
+]

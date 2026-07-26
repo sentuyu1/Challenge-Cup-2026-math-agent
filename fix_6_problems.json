@@ -1,0 +1,8 @@
+[
+  {"id": "optimization_1_fix", "domain": "运筹学", "problem": "求解整数规划：max z = 5x₁+8x₂, 约束: x₁+x₂≤6, 5x₁+9x₂≤45, x₁,x₂≥0 且为整数。用枚举法列出所有可能的整数点（x₁=0..6, x₂=0..6），找出使 z 最大的整数解。写 Python 代码。只输出代码和结果。"},
+  {"id": "linear_algebra_2_fix", "domain": "线性代数", "problem": "用 Python numpy 计算矩阵 C=[[1,2,3],[0,1,4],[0,0,1]] 的奇异值。只输出代码和奇异值数值。不需要输出 U、V 矩阵。"},
+  {"id": "graph_theory_2_fix", "domain": "图论", "problem": "用 Dijkstra 算法求从 A 到 F 的最短路径。顶点 A-F。边：AB=4, AC=2, BC=1, BD=5, CD=8, CE=10, DE=2, DF=6, EF=3。写 Python 代码计算。只输出代码和结果。"},
+  {"id": "ode_1_fix", "domain": "常微分方程", "problem": "求解 Riccati 方程 dy/dx = y² - x² + 1, y(0)=1。已知特解 y_p=x。令 y = x + 1/u，推导 u 的线性方程，然后求解。写出最终答案 y(x)。只输出公式，不输出推导。"},
+  {"id": "ode_2_fix", "domain": "常微分方程", "problem": "求解 dx/dt=3x-y, dy/dt=x+y, x(0)=1, y(0)=0。写出系数矩阵的特征值和通解。给出 x(t) 和 y(t) 的最终表达式。只输出核心结果。"},
+  {"id": "discrete_math_1_fix", "domain": "离散数学", "problem": "用 Master Theorem 求 T(n)=4T(n/2)+n²log n 的渐近界。判断属于 Case 1/2/3，写出 Θ 界。只输出判断和答案。"}
+]

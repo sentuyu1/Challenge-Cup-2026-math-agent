@@ -1,0 +1,26 @@
+# Intern-S1 数学智能体系统
+# Lagent 框架
+lagent/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# 结果文件（太大，不提交）
+results_*.json
+*_output.json
+test_result.json
+my_results.json
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# 环境变量（含 API 密钥）
+.env
+
+# 临时文件
+*.log
+__pycache__

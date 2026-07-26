@@ -1,0 +1,24 @@
+# 挑战杯 XH-202627 — 数学智能体项目依赖
+# 安装：pip install -r requirements.txt
+#
+# 注意：Lagent 已作为 git subdir 包含在项目内，
+# 如果 lagent/ 目录不存在，请执行：
+#   git clone https://github.com/InternLM/lagent.git
+
+# ── 大模型 API ──
+openai>=1.0.0
+requests>=2.31.0
+
+# ── 环境变量 ──
+python-dotenv>=1.0.0
+
+# ── 数学计算 ──
+numpy>=1.24.0
+sympy>=1.12
+scipy>=1.10.0
+
+# ── 数据处理 ──
+pandas>=2.0.0
+
+# ── Web Demo（可选） ──
+# gradio>=4.0.0

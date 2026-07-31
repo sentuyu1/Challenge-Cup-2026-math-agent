@@ -165,8 +165,8 @@ def save_results(results, output_path: str):
 
 def main():
     parser = argparse.ArgumentParser(description="批量数学解题")
-    parser.add_argument("--input", default="sample_problems.json", help="输入题目文件路径")
-    parser.add_argument("--output", default="results.json", help="输出结果文件路径")
+    parser.add_argument("--input_file", default="sample_problems.json", help="输入题目文件路径")
+    parser.add_argument("--output_dir", default="outputs", help="输出目录（每题的 idx.json）")
     parser.add_argument("--start", type=int, default=0, help="从第几题开始（从0计数）")
     parser.add_argument("--concurrency", type=int, default=LOCAL_MAX_CONCURRENCY, help="并发数")
     args = parser.parse_args()

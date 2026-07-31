@@ -290,7 +290,13 @@ class ReasoningAgent:
                 ),
             )
             insight = self._teacher(teach_msg, session_id=f"{idx}:t").content
-            trace.append({"step": "teach", "content": insight})
+            trace.append({
+                "step": "teach",
+                "content": {
+                    "raw": insight,
+                    "note": "本题的教育启发（知识点、技巧、误区、拓展）",
+                },
+            })
 
             elapsed = round(time.time() - t_start, 1)
             trace.append({"step": "finalize", "content": f"耗时 {elapsed}s，confidence={best['confidence']:.2f}"})

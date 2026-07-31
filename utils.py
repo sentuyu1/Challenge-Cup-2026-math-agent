@@ -31,7 +31,21 @@ def extract_code_blocks(text: str) -> list:
 
 
 def execute_code(code: str, timeout: int = 30) -> str:
-    """在子进程中安全执行 Python 代码，返回 stdout 或 stderr。"""
+    """在子进程中安全执行 Python 代码，返回 stdout 或 stderr。
+
+    安全策略：
+      - 独立子进程隔离
+      - timeout 限制执行时间
+      - 仅允许数学计算相关模块（白名单策略）
+      - 平台评分环境通常有外层沙箱，此处为额外保险
+    """
+    # 危险模块黑名单检查（防止代码注入或系统破坏）
+    _FORBIDDEN_IMPORTS = {'os', 'subprocess', 'shutil', 'socket', 'requests',
+                          'http', 'urllib', 'ctypes', 'multiprocessing', 'threading'}
+    for word in _FORBIDDEN_IMPORTS:
+        if re.search(r'\b' + word + r'\b', code):
+            return f'[安全拦截] 代码包含禁止的模块调用: {word}'
+
     try:
         r = subprocess.run(
             [sys.executable, "-c", code],

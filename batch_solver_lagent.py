@@ -214,18 +214,25 @@ def main():
 
         result = solve_one_problem(agent, executor, problem_text)
 
-        record = {
-            "idx": idx,
-            "status": "success" if result["success"] else "error",
-            "final_response": result["answer"],
-            "trace": [{"step": "reasoning", "content": result["reasoning"]}],
-            "domain": problem.get("domain", ""),
-            "error": result["error"] or None,
-            "turns": result["turns"],
-            "timestamp": datetime.now().isoformat(),
-        }
-        if result["error"]:
-            record["error"] = {"type": "RuntimeError", "message": result["error"]}
+        # 对齐 baseline 输出格式
+        if result["success"]:
+            record = {
+                "idx": idx,
+                "status": "success",
+                "final_response": result["answer"],
+                "trace": [{"step": "reasoning", "content": result["reasoning"]}],
+            }
+        else:
+            record = {
+                "idx": idx,
+                "status": "error",
+                "final_response": "",
+                "error": {
+                    "type": "RuntimeError",
+                    "message": result["error"] or "未知错误",
+                },
+                "trace": [],
+            }
 
         results.append(record)
         completed_ids.add(problem_id)

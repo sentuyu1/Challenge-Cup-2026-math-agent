@@ -24,7 +24,9 @@ SYSTEM_PROMPT = """你是一位顶尖的数学教授。请对给定的数学问�
 2. 给出严谨的数学推导或证明过程
 3. 涉及计算时写 Python 代码（```python ... ```）
 4. 最终答案用 \\boxed{答案} 格式给出
-5. 答案要精确、简洁、正确"""
+5. 答案要精确、简洁、正确
+6. 即使是证明题，也必须在最后用 \\boxed{结论} 格式写出核心结论（如 \\boxed{成立}、\\boxed{是}、\\boxed{R(3,3)=6} 等）
+7. 数值答案直接写数字，不要带单位或额外解释"""
 
 def solve_one(problem: str, idx: int) -> dict:
     """调用 API 解一道题"""
@@ -37,18 +39,19 @@ def solve_one(problem: str, idx: int) -> dict:
                     {'role': 'user', 'content': problem},
                 ],
                 temperature=0.2,
-                max_tokens=8192,
+                max_tokens=16384,
             )
             text = resp.choices[0].message.content
 
-            # 提取 \\boxed{}
-            m = re.search(r'\\boxed\{(.+?)\}', text)
-            if m:
-                answer = m.group(1).strip()
-            else:
-                # 取最后非空行
+            # 提取 \\boxed{} — 使用 utils 的鲁棒提取
+            from utils import extract_boxed
+            answer = extract_boxed(text)
+            if not answer:
+                # 取最后 3 个非空行的最短者作为兜底
                 lines = [l.strip() for l in text.split('\n') if l.strip()]
-                answer = lines[-1][:300] if lines else ''
+                candidates = lines[-3:]
+                answer = min(candidates, key=len) if candidates else ''
+                answer = answer[:300]
 
             return {'success': True, 'answer': answer, 'full': text[:2000], 'tokens': resp.usage.total_tokens if resp.usage else 0}
 

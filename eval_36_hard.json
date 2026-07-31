@@ -1,0 +1,55 @@
+[
+  {"id": "ode_hard_1", "subject": "常微分方程", "problem": "求解非线性 Riccati 方程 dy/dx = y^2 - 2/x^2，并找出其通解。"},
+  {"id": "ode_hard_2", "subject": "常微分方程", "problem": "用 Frobenius 级数法求解 x^2 y'' + x y' + (x^2 - 1/4)y = 0 在 x=0 附近的级数解（Bessel 方程 p=1/2）。"},
+
+  {"id": "pde_hard_1", "subject": "偏微分方程", "problem": "用特征线法求解拟线性 PDE：u u_x + u_y = 0，初始条件 u(x,0)=f(x)。讨论激波形成的条件。"},
+  {"id": "pde_hard_2", "subject": "偏微分方程", "problem": "求解非齐次热传导方程 u_t = u_xx + sin(x), x∈[0,π], t>0，边界 u(0,t)=u(π,t)=0，初始 u(x,0)=0。"},
+
+  {"id": "complex_hard_1", "subject": "复分析", "problem": "用留数定理计算 ∫_{-∞}^{∞} (cos x)/(x^2 + 1)^2 dx，并严格证明积分路径的合理性。"},
+  {"id": "complex_hard_2", "subject": "复分析", "problem": "设 f 是复平面上的整函数，且对任意 z 有 |f(z)| ≤ M|z|^n。证明 f 是次数不超过 n 的多项式（Liouville 定理推广）。"},
+
+  {"id": "real_hard_1", "subject": "实分析", "problem": "构造一个在 [0,1] 上处处连续但处处不可微的函数，并说明其存在性（Weierstrass 函数思路）。"},
+  {"id": "real_hard_2", "subject": "实分析", "problem": "证明 Lebesgue 控制收敛定理：若 f_n → f a.e.，且 |f_n| ≤ g 其中 g 可积，则 ∫f_n → ∫f。"},
+
+  {"id": "topology_hard_1", "subject": "拓扑学", "problem": "证明 Urysohn 引理：设 X 是正规空间，A,B 是不相交闭集，则存在连续函数 f:X→[0,1] 使 f(A)=0, f(B)=1。"},
+  {"id": "topology_hard_2", "subject": "拓扑学", "problem": "判断并证明：S^2（二维球面）与 T^2（环面）是否同伦等价？是否同胚？"},
+
+  {"id": "linear_hard_1", "subject": "线性代数", "problem": "设 V 是 n 维线性空间，T 是 V 上的线性变换。证明 T 可对角化当且仅当 V 可分解为 T 的特征子空间的直和。"},
+  {"id": "linear_hard_2", "subject": "线性代数", "problem": "求矩阵 A=[[0,1,0,0],[0,0,1,0],[0,0,0,1],[1,0,0,0]] 的 Jordan 标准型和最小多项式。"},
+
+  {"id": "abstract_hard_1", "subject": "抽象代数", "problem": "证明：有限域的乘法群是循环群。并由此推导出有限域的元素个数必为 p^n。"},
+  {"id": "abstract_hard_2", "subject": "抽象代数", "problem": "设 R 是交换环，I 是其理想。证明 I 是素理想当且仅当 R/I 是整环，I 是极大理想当且仅当 R/I 是域。"},
+
+  {"id": "prob_hard_1", "subject": "概率论", "problem": "设 X_1,...,X_n 独立同分布 ~ Exp(λ)。求 min(X_i) 的分布，并推导参数为 nλ 的指数分布。"},
+  {"id": "prob_hard_2", "subject": "概率论", "problem": "设 (B_t)_{t≥0} 是标准布朗运动。求 P(B_1 > 0, B_2 < 0) 并利用反射原理计算。"},
+
+  {"id": "stats_hard_1", "subject": "数理统计", "problem": "设 X_1,...,X_n ~ Uniform(0,θ)。求 θ 的极大似然估计 MLE，并判断该估计量是否是无偏的、一致的。"},
+  {"id": "stats_hard_2", "subject": "数理统计", "problem": "推导 Neyman-Pearson 引理：在给定显著性水平 α 下，似然比检验是最优势检验（MP test）。"},
+
+  {"id": "optimization_hard_1", "subject": "运筹学", "problem": "求解下列线性规划的对偶问题：max z=c^T x, s.t. Ax≤b, x≥0。并证明弱对偶定理。"},
+  {"id": "optimization_hard_2", "subject": "运筹学", "problem": "用 Kuhn-Tucker 条件求解非线性规划：min (x-3)^2+(y-2)^2, s.t. x^2+y^2≤5, x≥0, y≥0。"},
+
+  {"id": "numerical_hard_1", "subject": "数值分析", "problem": "推导 Gauss-Legendre 2 点求积公式的节点和权重，并用来近似计算 ∫_{-1}^{1} x^4 dx。"},
+  {"id": "numerical_hard_2", "subject": "数值分析", "problem": "用幂法（Power Method）求矩阵 [[4,1],[1,3]] 的主特征值，迭代 3 步从 (1,0)^T 开始。"},
+
+  {"id": "number_hard_1", "subject": "数论", "problem": "证明：若 p 是奇素数，则 2^{p-1} ≡ 1 (mod p)（费马小定理），并举反例说明逆命题不成立（Carmichael 数）。"},
+  {"id": "number_hard_2", "subject": "数论", "problem": "用二次互反律判断 x^2 ≡ 7 (mod 2027) 是否有解（2027 是素数）。"},
+
+  {"id": "combinatorics_hard_1", "subject": "组合数学", "problem": "用容斥原理（Inclusion-Exclusion）求 1 到 1000 中既不能被 2、3 也不能被 5 整除的数的个数。"},
+  {"id": "combinatorics_hard_2", "subject": "组合数学", "problem": "求 n 个不同元素的划分总数（Bell 数 B_n）。写出 B_4 的递推计算过程。"},
+
+  {"id": "graph_hard_1", "subject": "图论", "problem": "证明 Hall 婚姻定理：二分图 G=(X,Y,E) 存在饱和 X 的匹配当且仅当对任意 S⊆X，|N(S)|≥|S|。"},
+  {"id": "graph_hard_2", "subject": "图论", "problem": "用 Dijkstra 算法证明：若所有边权为正，则最短路径的子路径也是最短路径（最优子结构性质）。"},
+
+  {"id": "logic_hard_1", "subject": "数理逻辑", "problem": "用归结原理（Resolution）证明：(P∨Q) ∧ (¬P∨R) ∧ (¬Q∨R) → R 是有效的。"},
+  {"id": "logic_hard_2", "subject": "数理逻辑", "problem": "证明 Löwenheim-Skolem 定理的下降版本：若一个一阶理论有无穷模型，则它有可数模型。"},
+
+  {"id": "diff_geo_hard_1", "subject": "微分几何", "problem": "计算环面 T^2 参数化 r(θ,φ)=((2+cos φ)cos θ, (2+cos φ)sin θ, sin φ) 的高斯曲率 K。"},
+  {"id": "diff_geo_hard_2", "subject": "微分几何", "problem": "证明 Gauss-Bonnet 定理在闭曲面上的形式：∫∫_S K dA = 2π χ(S)。简述其拓扑意义。"},
+
+  {"id": "functional_hard_1", "subject": "泛函分析", "problem": "证明 Banach 空间中的一致有界原理（Banach-Steinhaus 定理）：若一族有界线性算子逐点有界，则算子范数一致有界。"},
+  {"id": "functional_hard_2", "subject": "泛函分析", "problem": "设 H 是 Hilbert 空间，T 是 H 上的紧自伴算子。证明 T 可对角化：存在 H 的标准正交基由 T 的特征向量组成（谱定理）。"},
+
+  {"id": "discrete_hard_1", "subject": "离散数学", "problem": "用生成函数方法求解递推关系 a_n = 3a_{n-1} - 2a_{n-2}，其中 a_0=1, a_1=3。"},
+  {"id": "discrete_hard_2", "subject": "离散数学", "problem": "证明 Ramsey 数 R(3,3)=6：即任意 6 个人的聚会中，必有 3 人两两认识或 3 人两两不认识。"}
+]

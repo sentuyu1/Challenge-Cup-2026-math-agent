@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import time
 
 from datasets import load_dataset
@@ -28,7 +29,7 @@ async_llm = dict(
     type=AsyncGPTAPI,
     model='gpt-4o-2024-05-13',
     retry=50,
-    key='sk-6kkTxSeSZw5uoHQOvC4BNfxSrqTtJsz6iK4bwbQsAyiZmGhS',
+    key=os.environ.get('OPENAI_API_KEY', ''),
     max_new_tokens=2048,
     stop_words=['</python'],
     proxies=dict(),

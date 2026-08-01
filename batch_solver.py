@@ -5,14 +5,14 @@
 1. 读取 JSON 格式的题目文件
 2. 逐题调用 Intern-S1 模型
 3. 解析模型输出中的答案
-4. 保存为比赛要求的 JSON 结果格式
-5. 支持断点续跑（中途失败可以从上次位置继续）
+4. 保存为比赛要求的目录式 JSON 结果格式（outputs/0.json, 1.json, ...）
+5. 支持断点续跑（已存在的 idx.json 自动跳过）
 6. 支持并发调用（默认 8 路） + 自动限速
 
 使用方法：
 1. 确保 .env 文件中配置了 INTERN_API_KEY
 2. 准备好题目文件（如 sample_problems.json）
-3. 运行：python batch_solver.py --input sample_problems.json --output results.json
+3. 运行：python batch_solver.py --input_file sample_problems.json --output_dir outputs
 """
 
 import asyncio
@@ -45,13 +45,11 @@ SYSTEM_PROMPT = """你是一名数学解题专家。请按以下步骤解决题�
 1. 仔细阅读题目，理解已知条件和求解目标；
 2. 进行逐步推理，必要时使用数学符号和公式；
 3. 给出最终答案；
-4. 最后必须输出 JSON 格式的结果，格式如下：
-{"answer": "你的最终答案", "reasoning": "简要的推理过程"}
+4. 最后用 \\boxed{答案} 的 LaTeX 格式输出最终答案。
 
 注意：
-- answer 字段只放最终答案，不要放推理过程；
-- reasoning 字段放关键推理步骤；
-- JSON 必须放在最后一行，且确保格式正确。
+- 最终答案必须放在 \\boxed{} 中；
+- 推理过程尽量详细清晰。
 """
 
 
@@ -65,40 +63,24 @@ def create_client():
 def parse_answer(text: str):
     """
     从模型输出中提取答案和推理过程。
-    优先解析最后的 JSON 块，如果解析失败则做简单兜底。
+    优先解析 \\boxed{}，兜底用最后非空行。
     """
-    import re
+    from utils import extract_boxed
 
-    # 尝试找到最后一个 ```json ... ``` 块
-    json_blocks = re.findall(r'```json\s*(.*?)\s*```', text, re.DOTALL)
-    if json_blocks:
-        try:
-            result = json.loads(json_blocks[-1])
-            return {
-                "answer": str(result.get("answer", "")).strip(),
-                "reasoning": str(result.get("reasoning", "")).strip(),
-            }
-        except json.JSONDecodeError:
-            pass
-
-    # 尝试找到最后一对大括号内的 JSON
-    matches = re.findall(r'\{.*"answer".*"reasoning".*\}', text, re.DOTALL)
-    if matches:
-        try:
-            result = json.loads(matches[-1])
-            return {
-                "answer": str(result.get("answer", "")).strip(),
-                "reasoning": str(result.get("reasoning", "")).strip(),
-            }
-        except json.JSONDecodeError:
-            pass
+    # 优先 \\boxed{}
+    boxed = extract_boxed(text)
+    if boxed:
+        return {
+            "answer": boxed,
+            "reasoning": text.strip()[:2000],
+        }
 
     # 兜底：把最后 200 字当作答案
     lines = [line.strip() for line in text.strip().split('\n') if line.strip()]
     final_answer = lines[-1] if lines else text.strip()
     return {
         "answer": final_answer[:500],
-        "reasoning": text.strip()[:1000],
+        "reasoning": text.strip()[:2000],
     }
 
 
@@ -114,9 +96,8 @@ def solve_one_problem(client, problem_text: str, retries: int = MAX_RETRIES):
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": problem_text},
                 ],
-                thinking_mode=True,
                 temperature=0.2,
-                max_tokens=4096,
+                max_tokens=16384,
             )
             raw_text = response.choices[0].message.content
             parsed = parse_answer(raw_text)
@@ -143,24 +124,42 @@ def solve_one_problem(client, problem_text: str, retries: int = MAX_RETRIES):
 
 
 def load_problems(input_path: str):
-    """读取题目文件。"""
+    """读取题目文件（支持 JSON 数组或 JSONL）。"""
     with open(input_path, "r", encoding="utf-8") as f:
-        return json.load(f)
+        # 尝试 JSON 数组
+        content = f.read().strip()
+        if content.startswith("["):
+            return json.loads(content)
+        # JSONL 格式：每行一个 JSON
+        problems = []
+        for line in content.split("\n"):
+            line = line.strip()
+            if line:
+                problems.append(json.loads(line))
+        return problems
 
 
-def load_existing_results(output_path: str):
-    """加载已存在的结果，用于断点续跑。"""
-    if os.path.exists(output_path):
-        with open(output_path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return []
+def save_single_result(output_dir: str, idx: int, record: dict):
+    """保存单题结果到 output_dir/{idx}.json（对齐基线目录格式）。"""
+    os.makedirs(output_dir, exist_ok=True)
+    filepath = os.path.join(output_dir, f"{idx}.json")
+    with open(filepath, "w", encoding="utf-8") as f:
+        json.dump(record, f, ensure_ascii=False, indent=2)
 
 
-def save_results(results, output_path: str):
-    """保存结果到 JSON 文件。"""
-    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(results, f, ensure_ascii=False, indent=2)
+def check_existing(output_dir: str, idx: int) -> bool:
+    """检查某题结果是否已存在且非空（用于断点续跑）。"""
+    filepath = os.path.join(output_dir, f"{idx}.json")
+    if os.path.exists(filepath):
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            # 文件存在且有内容 → 跳过
+            if data:
+                return True
+        except (json.JSONDecodeError, IOError):
+            pass
+    return False
 
 
 def main():
@@ -172,35 +171,37 @@ def main():
     args = parser.parse_args()
 
     print(f"开始时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"输入文件：{args.input}")
-    print(f"输出文件：{args.output}")
+    print(f"输入文件：{args.input_file}")
+    print(f"输出目录：{args.output_dir}")
     print(f"并发数：{args.concurrency}")
 
     # 读取题目
-    problems = load_problems(args.input)
+    problems = load_problems(args.input_file)
     total = len(problems)
     print(f"共读取 {total} 道题目")
 
-    # 加载已有结果（断点续跑）
-    results = load_existing_results(args.output)
-    completed_ids = {r["idx"] for r in results if "idx" in r}
-    print(f"已存在 {len(results)} 条结果，将跳过已完成的题目")
+    # 统计已完成的题目（断点续跑）
+    skipped_count = sum(1 for i in range(total) if check_existing(args.output_dir, i))
+    if skipped_count > 0:
+        print(f"已存在 {skipped_count} 条结果，将跳过已完成的题目")
 
     # 创建客户端
     client = create_client()
 
     # ── 异步并发主循环 ──
     semaphore = asyncio.Semaphore(args.concurrency)
+    success_count = 0
+    fail_count = 0
 
     async def process_one(idx: int, problem: dict):
-        problem_id = problem.get("id", f"prob_{idx:03d}")
+        nonlocal success_count, fail_count
 
-        if problem_id in completed_ids:
-            print(f"[{idx+1}/{total}] {problem_id} 已存在，跳过")
+        if check_existing(args.output_dir, idx):
+            print(f"[{idx+1}/{total}] idx={idx} 已存在，跳过")
             return
 
         async with semaphore:
-            print(f"\n[{idx+1}/{total}] 正在解答：{problem_id}")
+            print(f"\n[{idx+1}/{total}] 正在解答：idx={idx}")
             problem_text = problem.get("problem", "")
 
             result = await asyncio.to_thread(solve_one_problem, client, problem_text)
@@ -211,8 +212,9 @@ def main():
                     "idx": idx,
                     "status": "success",
                     "final_response": result["answer"],
-                    "trace": [{"step": "reasoning", "content": result["reasoning"]}],
+                    "trace": [{"step": "solve", "content": result["reasoning"]}],
                 }
+                success_count += 1
             else:
                 record = {
                     "idx": idx,
@@ -224,14 +226,13 @@ def main():
                     },
                     "trace": [],
                 }
+                fail_count += 1
 
-            results.append(record)
-            completed_ids.add(problem_id)
+            # 每道题后保存为独立文件（对齐基线 outputs/{idx}.json）
+            await asyncio.to_thread(save_single_result, args.output_dir, idx, record)
 
-            # 每道题后保存
-            await asyncio.to_thread(save_results, results, args.output)
-
-            print(f"  状态：{'成功' if result['success'] else '失败'}")
+            status_text = '成功' if result['success'] else '失败'
+            print(f"  状态：{status_text}")
             print(f"  答案：{result['answer'][:100]}...")
 
     async def run_all():
@@ -239,6 +240,10 @@ def main():
         await asyncio.gather(*tasks)
 
     asyncio.run(run_all())
+
+    print(f"\n完成时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"结果已保存至：{args.output_dir}/")
+    print(f"成功：{success_count}，失败：{fail_count}，跳过：{skipped_count}")
 
 
 if __name__ == "__main__":

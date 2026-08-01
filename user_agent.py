@@ -168,11 +168,12 @@ class ReasoningAgent:
       >>> print(result["final_response"])
     """
 
-    def __init__(self, client, config: Optional[AgentConfig] = None):
+    def __init__(self, client, config: Optional[AgentConfig] = None, *args, **kwargs):
         """
         参数：
           client: 平台注入的模型客户端，需支持 client.chat(messages, temperature, max_tokens) -> str
           config: 可选推理配置，不传则使用默认值
+          *args, **kwargs: 平台额外注入参数（兼容未来扩展）
         """
         self.config = config or AgentConfig()
         cfg = self.config

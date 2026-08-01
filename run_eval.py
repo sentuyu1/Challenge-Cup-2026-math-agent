@@ -3,7 +3,9 @@
 用法: python run_eval.py
 """
 import json, os, sys, time
-os.environ['INTERN_API_KEY'] = 'sk-ACi6ZnsFxeh3mfI35efkPZSujFiIyoCbDJmmRXKdjYyiFgIC'
+
+from dotenv import load_dotenv
+load_dotenv()
 
 from openai import OpenAI
 
@@ -12,8 +14,12 @@ with open('eval_36_hard.json', encoding='utf-8') as f:
     problems = json.load(f)
 
 # 创建 OpenAI 兼容客户端
+api_key = os.environ.get('INTERN_API_KEY', '')
+if not api_key:
+    raise RuntimeError('请设置环境变量 INTERN_API_KEY 或在 .env 文件中配置')
+
 client = OpenAI(
-    api_key=os.environ['INTERN_API_KEY'],
+    api_key=api_key,
     base_url='https://chat.intern-ai.org.cn/api/v1/',
 )
 

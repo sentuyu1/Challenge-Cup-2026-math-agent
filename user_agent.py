@@ -444,8 +444,10 @@ class ReasoningAgent:
                         content=(
                             "以下是你的代码执行结果，请检查并修正答案：\n\n"
                             f"{feedback}\n\n"
-                            "请根据这些结果，输出修正后的完整解答。\n"
-                            "在最后用 \\boxed{答案} 明确写出最终结果。"
+                            "请根据这些结果，检查数值是否正确。"
+                            "仅修改有误的计算或结论，保持原有推导结构。"
+                            "务必输出完整的解答文本（含推导），在最后用 \\boxed{答案} 给出最终结果。"
+                            "不要只输出 \\boxed{}，要保留所有推理步骤。"
                         ),
                     )
                     refined = solver(
@@ -454,7 +456,19 @@ class ReasoningAgent:
                         temperature=0.1,  # 修正阶段用低温度
                         max_tokens=cfg.solver_max_tokens,
                     )
-                    solution_text = refined.content
+                    refined_text = refined.content
+
+                    # ── 安全合并：修正轮丢失推导时保留原始解答 ──
+                    if len(refined_text) < 100 and len(solution_text) > 200:
+                        # 修正轮输出极短（可能只给了 \boxed{}）→ 用修正的 boxed 替换原始的
+                        refined_boxed = extract_boxed(refined_text)
+                        original_boxed = extract_boxed(solution_text)
+                        if refined_boxed and original_boxed:
+                            solution_text = solution_text.replace(original_boxed, refined_boxed)
+                        else:
+                            solution_text = solution_text + "\n\n" + refined_text
+                    else:
+                        solution_text = refined_text
 
                     trace.append({
                         "step": f"candidate_{cid}_refine",

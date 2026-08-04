@@ -51,18 +51,19 @@ class _PlatformLLMAdapter:
     """把平台提供的 client 包装成 Lagent 兼容的 LLM 后端。
 
     平台 client 接口（参考 baseline llm_client.py）：
-        client.chat(messages, temperature=0.2, max_tokens=4096) -> str
+        client.chat(messages, temperature=0.2, max_tokens=4096, thinking_mode=False) -> str
     """
 
-    def __init__(self, client, default_temperature: float = 0.2, default_max_tokens: int = 4096):
+    def __init__(self, client, default_temperature: float = 0.2, default_max_tokens: int = 4096, thinking_mode: bool = False):
         self._client = client
         self._default_temperature = default_temperature
         self._default_max_tokens = default_max_tokens
+        self._thinking_mode = thinking_mode
 
     def chat(self, messages: list, **kwargs) -> str:
         temperature = kwargs.pop("temperature", self._default_temperature)
         max_tokens = kwargs.pop("max_tokens", self._default_max_tokens)
-        return self._client.chat(messages, temperature=temperature, max_tokens=max_tokens)
+        return self._client.chat(messages, temperature=temperature, max_tokens=max_tokens, thinking_mode=self._thinking_mode)
 
 
 # ============================================================
@@ -213,13 +214,14 @@ class ReasoningAgent:
 
         # 求解 Agent（高温度 0.6，用于多候选采样 — 这是 baseline 核心策略）
         # 创建两个版本：证明专用 + 计算专用，根据题型自动选择
+        # 求解阶段开启 thinking mode，提升复杂推理正确率
         self._solver_proof = Agent(
-            llm=_PlatformLLMAdapter(client, cfg.solver_temperature, cfg.solver_max_tokens),
+            llm=_PlatformLLMAdapter(client, cfg.solver_temperature, cfg.solver_max_tokens, thinking_mode=True),
             template=[{"role": "system", "content": _PROMPT_SOLVER_PROOF}],
             name="数学求解器(证明)",
         )
         self._solver_compute = Agent(
-            llm=_PlatformLLMAdapter(client, cfg.solver_temperature, cfg.solver_max_tokens),
+            llm=_PlatformLLMAdapter(client, cfg.solver_temperature, cfg.solver_max_tokens, thinking_mode=True),
             template=[{"role": "system", "content": _PROMPT_SOLVER_COMPUTE}],
             name="数学求解器(计算)",
         )

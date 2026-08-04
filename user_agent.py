@@ -41,7 +41,7 @@ if os.path.isdir(_LAGENT_DIR):
 from lagent.agents import Agent
 from lagent.schema import AgentMessage
 
-from utils import extract_code, execute_code, extract_boxed, extract_final_answer, is_correct_vote
+from utils import extract_code, extract_code_blocks, execute_code, extract_boxed, extract_final_answer, is_correct_vote
 
 
 # ============================================================
@@ -63,9 +63,6 @@ class _PlatformLLMAdapter:
         temperature = kwargs.pop("temperature", self._default_temperature)
         max_tokens = kwargs.pop("max_tokens", self._default_max_tokens)
         return self._client.chat(messages, temperature=temperature, max_tokens=max_tokens)
-
-
-from utils import extract_code, execute_code, extract_boxed, extract_final_answer, is_correct_vote
 
 
 # ============================================================
@@ -95,8 +92,30 @@ _PROMPT_SOLVER = (
     "要求：\n"
     "1. 先分析题意和关键条件\n"
     "2. 给出必要的推导步骤，关键步骤不可省略\n"
-    "3. 涉及计算时写 Python 代码（```python ... ```）\n"
+    "3. 涉及计算时写 Python 代码（```python ... ```），稍后会反馈执行结果供你修正\n"
     "4. 最终答案用 \\boxed{答案} 的 LaTeX 格式明确写出"
+)
+
+_PROMPT_SOLVER_PROOF = (
+    "你是一位严谨的数学定理证明专家。请对给定的数学命题给出完整严谨的证明。\n\n"
+    "要求：\n"
+    "1. 明确写出需要证明的命题\n"
+    "2. 给出从已知条件到结论的完整逻辑推导，每一步都要有严格的数学依据\n"
+    "3. 涉及计算验证时写 Python 代码（```python ... ```）\n"
+    "4. 证明完成后，在 \\boxed{成立} 或 \\boxed{结论} 中写明最终结论\n"
+    "5. 注意处理边界条件和特殊情况\n"
+    "6. 如果题面问「是否」类问题，需明确回答「是」或「否」并证明"
+)
+
+_PROMPT_SOLVER_COMPUTE = (
+    "你是一位数学计算专家。请对给定的数学计算题给出精确解答。\n\n"
+    "要求：\n"
+    "1. 先明确需要计算的目标\n"
+    "2. 选择合适的计算方法并说明理由\n"
+    "3. 编写 Python 代码进行数值/符号计算（```python ... ```），稍后会反馈执行结果\n"
+    "4. 根据代码执行结果，给出精确答案\n"
+    "5. 最终答案用 \\boxed{答案} 的 LaTeX 格式明确写出\n"
+    "6. 数值答案保留合理精度，但优先给出精确解析表达式"
 )
 
 _PROMPT_VOTER = (
@@ -126,8 +145,8 @@ _PROMPT_TEACHER = (
 class AgentConfig:
     """推理流水线可调参数。"""
     # ── 多候选投票（核心鲁棒性参数）──
-    candidate_count: int = 3           # 求解器生成候选答案数（≥1）
-    vote_count: int = 2                # 每个候选答案的投票验证次数
+    candidate_count: int = 5           # 求解器生成候选答案数（≥1）
+    vote_count: int = 3                # 每个候选答案的投票验证次数
 
     # ── 温度 ──
     analyzer_temperature: float = 0.1
@@ -193,10 +212,16 @@ class ReasoningAgent:
         )
 
         # 求解 Agent（高温度 0.6，用于多候选采样 — 这是 baseline 核心策略）
-        self._solver = Agent(
+        # 创建两个版本：证明专用 + 计算专用，根据题型自动选择
+        self._solver_proof = Agent(
             llm=_PlatformLLMAdapter(client, cfg.solver_temperature, cfg.solver_max_tokens),
-            template=[{"role": "system", "content": _PROMPT_SOLVER}],
-            name="数学求解器",
+            template=[{"role": "system", "content": _PROMPT_SOLVER_PROOF}],
+            name="数学求解器(证明)",
+        )
+        self._solver_compute = Agent(
+            llm=_PlatformLLMAdapter(client, cfg.solver_temperature, cfg.solver_max_tokens),
+            template=[{"role": "system", "content": _PROMPT_SOLVER_COMPUTE}],
+            name="数学求解器(计算)",
         )
 
         # 投票 Agent（温度 0.0，确保判断一致性）
@@ -247,10 +272,16 @@ class ReasoningAgent:
             strategy = self._strategist(plan_msg, session_id=f"{idx}:s").content
             trace.append({"step": "strategize", "content": strategy})
 
+            # 判断是否为证明题：题面含证明/推导/构造/定理等关键词
+            _proof_keywords = ["证明", "求证", "推导", "判断并证明", "证明或反驳",
+                               "是否", "定理", "引理", "当且仅当", "充要",
+                               "构造", "说明其存在", "证明或"]
+            is_proof = any(kw in problem for kw in _proof_keywords)
+
             # ══════════════════════════════════════════════════════
-            # ③ 多候选生成（baseline 风格，但加入了分析/策略上下文）
+            # ③ 多候选生成（含代码执行反馈环 + 题型自适应 prompt）
             # ══════════════════════════════════════════════════════
-            candidates, gen_trace = self._generate_candidates(problem, analysis, strategy, idx)
+            candidates, gen_trace = self._generate_candidates(problem, analysis, strategy, idx, is_proof)
             trace.extend(gen_trace)
 
             # debug 日志：候选数
@@ -274,10 +305,51 @@ class ReasoningAgent:
                 "content": f"选定最佳候选 (confidence={best['confidence']:.2f}，共 {len(candidates)} 候选)",
             })
 
-            # 从最佳候选中提取最终答案
-            final_answer = extract_final_answer(best["content"])
-            if not final_answer:
-                final_answer = "未能提取答案"
+            # ── 构建 final_response（FAQ Q120/Q118 要求完整解答，非仅 boxed 结论）──
+            best_text = best["content"]
+            boxed_answer = extract_boxed(best_text)
+
+            # is_proof 已在第②步后判定，此处直接复用
+
+            if is_proof:
+                # 证明题：返回完整解答（judger 需要判断推理过程是否合理）
+                # 同时确保 boxed 结论可见
+                if len(best_text) < 8000:
+                    final_response = best_text
+                else:
+                    # 过长时保留关键头尾
+                    final_response = best_text[:4000] + "\n\n... (中间过程省略) ...\n\n" + best_text[-4000:]
+            elif boxed_answer:
+                # 计算题/填空题：返回关键推导摘要 + 最终答案
+                # 取解答最后 1/3（通常含最终推导+答案）避免丢失上下文
+                answer_parts = best_text.split("\n")
+                if len(answer_parts) > 30:
+                    # 保留开头的分析 + 结尾的答案
+                    final_response = (
+                        "\n".join(answer_parts[:8])
+                        + "\n\n... (推导过程) ...\n\n"
+                        + "\n".join(answer_parts[-20:])
+                    )
+                else:
+                    final_response = best_text
+            else:
+                # 兜底：返回完整解答
+                final_response = best_text if len(best_text) < 8000 else best_text[:4000] + best_text[-4000:]
+
+            final_response = final_response.strip()
+            if not final_response:
+                final_response = boxed_answer or "未能提取答案"
+
+            final_answer = boxed_answer or extract_final_answer(best_text) or "见解答"
+
+            trace.append({
+                "step": "finalize",
+                "content": {
+                    "boxed_answer": final_answer,
+                    "is_proof": is_proof,
+                    "final_response_length": len(final_response),
+                },
+            })
 
             # ══════════════════════════════════════════════════════
             # ⑤ 教育启发（基于最佳候选）
@@ -302,7 +374,7 @@ class ReasoningAgent:
             elapsed = round(time.time() - t_start, 1)
             trace.append({"step": "finalize", "content": f"耗时 {elapsed}s，confidence={best['confidence']:.2f}"})
 
-            return {"final_response": final_answer, "trace": trace}
+            return {"final_response": final_response, "trace": trace}
 
         except Exception as exc:
             trace.append({
@@ -311,23 +383,28 @@ class ReasoningAgent:
             })
             return {"final_response": "", "trace": trace}
 
-    # ── 多候选生成 ──
+    # ── 多候选生成（含代码执行反馈环 + 题型自适应）──
     def _generate_candidates(
-        self, problem: str, analysis: str, strategy: str, idx: int
+        self, problem: str, analysis: str, strategy: str, idx: int, is_proof: bool = False
     ) -> Tuple[List[str], List[Dict]]:
-        """生成多个候选解答（baseline _generate_candidates 的增强版）。
+        """生成多个候选解答，每个候选含代码执行→反馈→修正的闭环。
 
-        与 baseline 的关键差异：
-          - 不是裸题目，而是注入了分析 + 策略作为上下文
-          - 每个候选收到不同的采样 seed（通过 candidate_id 区分）
-          - 若模型输出包含 Python 代码，自动执行并反馈结果
+        流程：
+          1. 根据题型选择 solver（证明专用 / 计算专用）
+          2. 求解器给出初步解答（含 Python 代码）
+          3. 提取并执行代码，收集输出
+          4. 将执行结果反馈给求解器，要求修正/确认
+          5. 取修正后的解答作为最终候选
         """
         candidates = []
         trace = []
         cfg = self.config
 
+        # ── 题型自适应：选择对应的 solver ──
+        solver = self._solver_proof if is_proof else self._solver_compute
+
         for cid in range(cfg.candidate_count):
-            # 为每个候选构造带编号的 prompt（鼓励多样性）
+            # ═══ 第 1 轮：初步求解 ═══
             solve_msg = AgentMessage(
                 sender="user",
                 content=(
@@ -339,8 +416,7 @@ class ReasoningAgent:
                 ),
             )
 
-            # 求解器调用（使用高温度 0.6 促进多样性）
-            response = self._solver(
+            response = solver(
                 solve_msg,
                 session_id=f"{idx}:solve:{cid}",
                 temperature=cfg.solver_temperature,
@@ -348,11 +424,61 @@ class ReasoningAgent:
             )
             solution_text = response.content
 
+            # ═══ 第 2 轮：代码执行 + 反馈修正 ═══
+            code_blocks = extract_code_blocks(solution_text)
+            if code_blocks:
+                code_outputs = []
+                for code in code_blocks:
+                    exec_result = execute_code(code, timeout=cfg.code_timeout)
+                    code_outputs.append(exec_result)
+
+                if code_outputs:
+                    feedback = "\n".join(
+                        f"[代码块 {i+1} 执行结果]:\n{out}"
+                        for i, out in enumerate(code_outputs)
+                    )
+                    refine_msg = AgentMessage(
+                        sender="user",
+                        content=(
+                            "以下是你的代码执行结果，请检查并修正答案：\n\n"
+                            f"{feedback}\n\n"
+                            "请根据这些结果，输出修正后的完整解答。\n"
+                            "在最后用 \\boxed{答案} 明确写出最终结果。"
+                        ),
+                    )
+                    refined = solver(
+                        refine_msg,
+                        session_id=f"{idx}:refine:{cid}",
+                        temperature=0.1,  # 修正阶段用低温度
+                        max_tokens=cfg.solver_max_tokens,
+                    )
+                    solution_text = refined.content
+
+                    trace.append({
+                        "step": f"candidate_{cid}_refine",
+                        "content": {
+                            "candidate_id": cid,
+                            "code_count": len(code_outputs),
+                            "code_outputs": code_outputs,
+                            "refined_response": solution_text[:2000],
+                        },
+                    })
+                else:
+                    trace.append({
+                        "step": f"candidate_{cid}_code_exec",
+                        "content": {
+                            "candidate_id": cid,
+                            "code_count": len(code_blocks),
+                            "note": "代码执行完成，无有效输出",
+                        },
+                    })
+
+            # 记录候选
             trace.append({
                 "step": f"candidate_{cid}",
                 "content": {
                     "candidate_id": cid,
-                    "prompt_preview": solve_msg.content[:300],
+                    "solver_type": "proof" if is_proof else "compute",
                     "response": solution_text[:2000],
                 },
             })

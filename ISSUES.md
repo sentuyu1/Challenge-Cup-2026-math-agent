@@ -2,11 +2,59 @@
 
 ---
 
-## 评测 1：2026-08-02（commit `2818038`）— 112 题全部失败，得分 0%
+## 评测时间线（正确版本）⚠️ 重要
 
-### 评测 2：2026-08-04（commit `dacf4d1`）— 112 题全部通过，得分 17.0%
+| 提交日期 | 评测日期 | Commit | 说明 | API | 得分 |
+|----------|----------|--------|------|-----|------|
+| **7/31** | **8/4** | `dacf4d1` | 旧系统（P2 thinking mode，代码正常） | ✅ 全成功 | **17%** |
+| **8/1 中午** | **8/2** | `2818038` | 新系统（P0 合规修复，**改坏了**） | ❌ 全失败 | **0%** |
+| **8/4 → 8/6** | 待评测 | `e51da4c` → `0d40acd` | 当前最新版（修复+P1+P2+跑偏） | 待验证 | 待验证 |
 
-> **关键发现：两次评测之间的差异验证了问题根因**
+> **结论：不是 P0 修复解决了 API 问题，而是 P0 修复引入了 Bug 导致 API 全失败。**
+
+---
+
+## 8/1 合规修复引入的 3 个 Bug（commit `2818038`）
+
+通过 `git diff dacf4d1..2818038` 对比 7/31(正常) 和 8/1(失败) 两个版本：
+
+### Bug 1 — 重复 import（第 44 行 + 第 68 行）
+
+```python
+# 第 44 行 — 正常
+from utils import extract_code, execute_code, extract_boxed, extract_final_answer, is_correct_vote
+
+# ... _PlatformLLMAdapter 类定义 ...
+
+# 第 68 行 — 多余的重复 import（8/1 新增bug）
+from utils import extract_code, execute_code, extract_boxed, extract_final_answer, is_correct_vote
+```
+
+Python import 语句放在类定义之后是非惯用位置，平台 runner 在 AST 解析/导入时代码结构异常。
+
+### Bug 2 — import 插在注释区域中间
+
+第 68 行的 import 插在 `_PlatformLLMAdapter` 类结束和 `# 子 Agent 系统提示词` 注释之间，破坏了模块的逻辑分区。平台 runner 可能使用 AST 分析 `user_agent.py`，这种非常规结构会导致解析失败。
+
+### Bug 3 — 平台 runner 导入失败 → 连锁反应
+
+```
+import user_agent.py → AST 解析异常 → ReasoningAgent 实例化失败
+→ solver = None → client.chat() 抛出 HTTPError
+→ except 分支返回 final_response="" 
+→ 平台判 "final_response must be non-empty"
+→ 全部 112 题 invalid
+```
+
+证据：日志中 112 次调用全部 `retry=False`，且 70% 在 0.2-0.3s 瞬间失败（Python 异常，非网络超时）。
+
+### 修复方式（7/31 → 8/4）
+
+8/4 的 `dacf4d1` 版本删除了第 68 行的重复 import，并重构了 `_PlatformLLMAdapter` 添加 `thinking_mode` 参数。这同时修复了 Bug 1 和 Bug 2，API 调用恢复正常（2710 次全成功）。
+
+---
+
+## 评测 2：2026-08-04（commit `dacf4d1`）— 112 题全部通过，得分 17.0%
 
 ---
 

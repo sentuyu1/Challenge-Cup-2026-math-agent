@@ -435,21 +435,38 @@ class ReasoningAgent:
                     code_outputs.append(exec_result)
 
                 if code_outputs:
+                    # 检查是否存在代码执行错误
+                    has_error = any(
+                        'error' in out.lower() or 'traceback' in out.lower() or 'indexerror' in out.lower()
+                        or 'typeerror' in out.lower() or 'syntaxerror' in out.lower() or 'nameerror' in out.lower()
+                        for out in code_outputs
+                    )
+
                     feedback = "\n".join(
                         f"[代码块 {i+1} 执行结果]:\n{out}"
                         for i, out in enumerate(code_outputs)
                     )
-                    refine_msg = AgentMessage(
-                        sender="user",
-                        content=(
+
+                    if has_error:
+                        refine_prompt = (
+                            "你之前写的代码执行时遇到了错误，请查看以下错误输出，找出代码中的问题并修正推导中的数值错误：\n\n"
+                            f"{feedback}\n\n"
+                            "注意：原题没有变化，你仍然需要回答原题。"
+                            "代码错误不代表题目无解，请尝试修正代码逻辑后重新给出解答。"
+                            "如果代码暂时无法修正，请基于解析方法继续推导。"
+                            "务必输出完整的解答文本（含推导），在最后用 \\boxed{答案} 给出最终结果。"
+                        )
+                    else:
+                        refine_prompt = (
                             "以下是你的代码执行结果，请检查并修正答案：\n\n"
                             f"{feedback}\n\n"
                             "请根据这些结果，检查数值是否正确。"
                             "仅修改有误的计算或结论，保持原有推导结构。"
                             "务必输出完整的解答文本（含推导），在最后用 \\boxed{答案} 给出最终结果。"
                             "不要只输出 \\boxed{}，要保留所有推理步骤。"
-                        ),
-                    )
+                        )
+
+                    refine_msg = AgentMessage(sender="user", content=refine_prompt)
                     refined = solver(
                         refine_msg,
                         session_id=f"{idx}:refine:{cid}",
@@ -458,8 +475,15 @@ class ReasoningAgent:
                     )
                     refined_text = refined.content
 
-                    # ── 安全合并：修正轮丢失推导时保留原始解答 ──
-                    if len(refined_text) < 100 and len(solution_text) > 200:
+                    # ── 安全合并：修正轮丢失推导或跑偏时保留原始解答 ──
+                    # 跑偏信号：模型说"假设题目/缺少具体题目/没有提供"
+                    drifted = any(kw in refined_text for kw in ["假设题目", "缺少具体的", "没有提供",
+                                                                 "针对具体问题", "如果您有具体"])
+
+                    if drifted:
+                        # 修正轮跑偏（编造了新题目）→ 回退到第一轮，仅用代码输出追加提示
+                        solution_text = solution_text + "\n\n[代码执行反馈]:\n" + feedback[:500]
+                    elif len(refined_text) < 100 and len(solution_text) > 200:
                         # 修正轮输出极短（可能只给了 \boxed{}）→ 用修正的 boxed 替换原始的
                         refined_boxed = extract_boxed(refined_text)
                         original_boxed = extract_boxed(solution_text)

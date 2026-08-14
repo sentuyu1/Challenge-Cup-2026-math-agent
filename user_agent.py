@@ -160,7 +160,7 @@ class AgentConfig:
     teacher_temperature: float = 0.8
 
     # ── max_tokens ──
-    solver_max_tokens: int = 32768
+    solver_max_tokens: int = 16384
     analyzer_max_tokens: int = 512
     strategist_max_tokens: int = 512
     voter_max_tokens: int = 1024

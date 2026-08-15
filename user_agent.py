@@ -421,16 +421,11 @@ class ReasoningAgent:
                 ),
             )
 
-            # ── 温度梯度：5 个候选用不同温度，增加解题思路多样性 ──
-            if cfg.candidate_count > 1:
-                candidate_temp = 0.2 + (cid / (cfg.candidate_count - 1)) * 0.8  # [0.2, 0.4, 0.6, 0.8, 1.0]
-            else:
-                candidate_temp = 0.2
-
+            # 恒温 0.6（温度梯度曾起反作用，回退为恒温）
             response = solver(
                 solve_msg,
                 session_id=f"{idx}:solve:{cid}",
-                temperature=candidate_temp,
+                temperature=cfg.solver_temperature,
                 max_tokens=cfg.solver_max_tokens,
             )
             solution_text = response.content

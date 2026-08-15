@@ -52,18 +52,30 @@ class _PlatformLLMAdapter:
 
     平台 client 接口（参考 baseline llm_client.py）：
         client.chat(messages, temperature=0.2, max_tokens=4096, thinking_mode=False) -> str
+
+    model 参数：空字符串 = 使用平台默认模型（零风险）；填了 = 覆盖模型名。
+    通过 baseline 的 chat(**request_args) 机制传 model 覆盖默认值。
     """
 
-    def __init__(self, client, default_temperature: float = 0.2, default_max_tokens: int = 4096, thinking_mode: bool = False):
+    def __init__(self, client, default_temperature: float = 0.2, default_max_tokens: int = 4096, thinking_mode: bool = False, model: str = ""):
         self._client = client
         self._default_temperature = default_temperature
         self._default_max_tokens = default_max_tokens
         self._thinking_mode = thinking_mode
+        self._model = model
 
     def chat(self, messages: list, **kwargs) -> str:
         temperature = kwargs.pop("temperature", self._default_temperature)
         max_tokens = kwargs.pop("max_tokens", self._default_max_tokens)
-        return self._client.chat(messages, temperature=temperature, max_tokens=max_tokens, thinking_mode=self._thinking_mode)
+        # 若指定了 model，则通过 request_args 覆盖平台默认模型
+        model_kwargs = {"model": self._model} if self._model else {}
+        return self._client.chat(
+            messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            thinking_mode=self._thinking_mode,
+            **model_kwargs,
+        )
 
 
 # ============================================================
@@ -169,6 +181,7 @@ class AgentConfig:
     # ── 其他 ──
     internal_error_retries: int = 2    # API internal error 重试
     code_timeout: int = 30             # 代码执行超时（秒）
+    model: str = "intern-s1-pro"        # 模型名，空=平台默认；已切换为 s1-pro（万亿参数，数学更强）
 
 
 # ============================================================
@@ -203,14 +216,14 @@ class ReasoningAgent:
 
         # 分析 Agent（低温度，提取结构化信息）
         self._analyzer = Agent(
-            llm=_PlatformLLMAdapter(client, cfg.analyzer_temperature, cfg.analyzer_max_tokens),
+            llm=_PlatformLLMAdapter(client, cfg.analyzer_temperature, cfg.analyzer_max_tokens, model=cfg.model),
             template=[{"role": "system", "content": _PROMPT_ANALYZER}],
             name="问题分析师",
         )
 
         # 策略 Agent（低温度，规划最优路径）
         self._strategist = Agent(
-            llm=_PlatformLLMAdapter(client, cfg.strategist_temperature, cfg.strategist_max_tokens),
+            llm=_PlatformLLMAdapter(client, cfg.strategist_temperature, cfg.strategist_max_tokens, model=cfg.model),
             template=[{"role": "system", "content": _PROMPT_STRATEGIST}],
             name="策略规划师",
         )
@@ -219,26 +232,26 @@ class ReasoningAgent:
         # 创建两个版本：证明专用 + 计算专用，根据题型自动选择
         # 求解阶段开启 thinking mode，提升复杂推理正确率
         self._solver_proof = Agent(
-            llm=_PlatformLLMAdapter(client, cfg.solver_temperature, cfg.solver_max_tokens, thinking_mode=True),
+            llm=_PlatformLLMAdapter(client, cfg.solver_temperature, cfg.solver_max_tokens, thinking_mode=True, model=cfg.model),
             template=[{"role": "system", "content": _PROMPT_SOLVER_PROOF}],
             name="数学求解器(证明)",
         )
         self._solver_compute = Agent(
-            llm=_PlatformLLMAdapter(client, cfg.solver_temperature, cfg.solver_max_tokens, thinking_mode=True),
+            llm=_PlatformLLMAdapter(client, cfg.solver_temperature, cfg.solver_max_tokens, thinking_mode=True, model=cfg.model),
             template=[{"role": "system", "content": _PROMPT_SOLVER_COMPUTE}],
             name="数学求解器(计算)",
         )
 
         # 投票 Agent（温度 0.0，确保判断一致性）
         self._voter = Agent(
-            llm=_PlatformLLMAdapter(client, cfg.voter_temperature, cfg.voter_max_tokens),
+            llm=_PlatformLLMAdapter(client, cfg.voter_temperature, cfg.voter_max_tokens, model=cfg.model),
             template=[{"role": "system", "content": _PROMPT_VOTER}],
             name="投票验证器",
         )
 
         # 教学 Agent
         self._teacher = Agent(
-            llm=_PlatformLLMAdapter(client, cfg.teacher_temperature, cfg.teacher_max_tokens),
+            llm=_PlatformLLMAdapter(client, cfg.teacher_temperature, cfg.teacher_max_tokens, model=cfg.model),
             template=[{"role": "system", "content": _PROMPT_TEACHER}],
             name="启发式教师",
         )

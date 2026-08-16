@@ -67,13 +67,15 @@ class _PlatformLLMAdapter:
     def chat(self, messages: list, **kwargs) -> str:
         temperature = kwargs.pop("temperature", self._default_temperature)
         max_tokens = kwargs.pop("max_tokens", self._default_max_tokens)
+        # 支持运行时覆盖 thinking_mode（多轮推理中间轮可关）
+        thinking_mode = kwargs.pop("thinking_mode", self._thinking_mode)
         # 若指定了 model，则通过 request_args 覆盖平台默认模型
         model_kwargs = {"model": self._model} if self._model else {}
         return self._client.chat(
             messages,
             temperature=temperature,
             max_tokens=max_tokens,
-            thinking_mode=self._thinking_mode,
+            thinking_mode=thinking_mode,
             **model_kwargs,
         )
 
@@ -143,6 +145,35 @@ _PROMPT_VOTER = (
     "其中 A 表示候选解答正确，B 表示候选解答错误。"
 )
 
+_PROMPT_SUMMARIZER = (
+    "你是一位数学推理摘要专家。请把下面的解题推理压缩成若干条关键引理（lemma）。\n\n"
+    "要求：\n"
+    "1. 每条引理是推导过程中得出的、可复用的关键中间结论\n"
+    "2. 用简洁的数学语言陈述，附上简短证明依据\n"
+    "3. 只保留对解题真正有用的结论，去掉冗余步骤\n"
+    "4. 最多提取 4 条引理\n\n"
+    "输出格式（每条一行）：\n"
+    "引理：<陈述>（依据：<证明依据>）\n"
+    "引理：<陈述>（依据：<证明依据>）\n"
+    "...\n\n"
+    "如果这段推理没有可复用的中间结论，只输出：无"
+)
+
+_PROMPT_LEMMA_VERIFIER = (
+    "你是一个数学引理验证器。请判断下面这条引理（中间结论）是否正确。\n\n"
+    "引理：\n"
+    "{lemma}\n\n"
+    "只输出一行：VERDICT: A（正确）或 VERDICT: B（错误）"
+)
+
+_PROMPT_PROCESS_VERIFIER = (
+    "你是一个数学证明审查员。请检查下面的解答，找出逻辑漏洞、计算错误或推理缺口。\n\n"
+    "题目：\n{problem}\n\n"
+    "解答：\n{solution}\n\n"
+    "如果解答正确且完整，只输出：VERDICT: A\n"
+    "如果存在漏洞，输出：VERDICT: B，并简要指出问题所在"
+)
+
 
 _PROMPT_TEACHER = (
     "你是一位优秀的数学教师。请根据前面的解题过程，生成教育启发：\n"
@@ -161,8 +192,11 @@ _PROMPT_TEACHER = (
 class AgentConfig:
     """推理流水线可调参数。"""
     # ── 多候选投票（核心鲁棒性参数）──
-    candidate_count: int = 5           # 求解器生成候选答案数（≥1）
-    vote_count: int = 3                # 每个候选答案的投票验证次数
+    candidate_count: int = 2           # 求解器生成候选答案数（≥1），多轮推理模式下用较小值
+    vote_count: int = 2                # 每个候选答案的投票验证次数
+
+    # ── 多轮层次化推理（Intern-S1-MO 核心）──
+    reasoning_rounds: int = 2          # 推理轮数（≥1），每轮：求解→摘要引理→验证→下一轮复用；2轮平衡耗时与深度
 
     # ── 温度 ──
     analyzer_temperature: float = 0.1
@@ -181,7 +215,7 @@ class AgentConfig:
     # ── 其他 ──
     internal_error_retries: int = 2    # API internal error 重试
     code_timeout: int = 30             # 代码执行超时（秒）
-    model: str = "intern-s1-pro"        # 模型名，空=平台默认；已切换为 s1-pro（万亿参数，数学更强）
+    model: str = ""                    # 模型名，空=用平台默认（甲方推荐 s2）；平台评测固定模型，代码传 model 无效
 
 
 # ============================================================
@@ -249,6 +283,27 @@ class ReasoningAgent:
             name="投票验证器",
         )
 
+        # 摘要 Agent（把长推理压缩成引理，Intern-S1-MO 的 summarizer）
+        self._summarizer = Agent(
+            llm=_PlatformLLMAdapter(client, 0.2, 2048, model=cfg.model),
+            template=[{"role": "system", "content": _PROMPT_SUMMARIZER}],
+            name="引理摘要器",
+        )
+
+        # 引理验证 Agent（验证中间结论正确性，防错误传播）
+        self._lemma_verifier = Agent(
+            llm=_PlatformLLMAdapter(client, 0.0, 512, model=cfg.model),
+            template=[{"role": "system", "content": _PROMPT_LEMMA_VERIFIER}],
+            name="引理验证器",
+        )
+
+        # 过程验证 Agent（检查最终解答漏洞，Intern-S1-MO 的 process verifier）
+        self._process_verifier = Agent(
+            llm=_PlatformLLMAdapter(client, 0.0, 1024, model=cfg.model),
+            template=[{"role": "system", "content": _PROMPT_PROCESS_VERIFIER}],
+            name="过程验证器",
+        )
+
         # 教学 Agent
         self._teacher = Agent(
             llm=_PlatformLLMAdapter(client, cfg.teacher_temperature, cfg.teacher_max_tokens, model=cfg.model),
@@ -297,34 +352,17 @@ class ReasoningAgent:
             is_proof = any(kw in problem for kw in _proof_keywords)
 
             # ══════════════════════════════════════════════════════
-            # ③ 多候选生成（含代码执行反馈环 + 题型自适应 prompt）
+            # ③ 多轮层次化推理（Intern-S1-MO 核心：推理→摘要引理→复用）
             # ══════════════════════════════════════════════════════
-            candidates, gen_trace = self._generate_candidates(problem, analysis, strategy, idx, is_proof)
-            trace.extend(gen_trace)
+            best_text, reason_trace = self._multi_round_reason(problem, analysis, strategy, idx, is_proof)
+            trace.extend(reason_trace)
 
-            # debug 日志：候选数
             trace.append({
-                "step": "voting_summary",
-                "content": f"生成 {len(candidates)} 个候选答案，准备投票验证。",
-            })
-
-            # ══════════════════════════════════════════════════════
-            # ④ 多候选投票验证（baseline 风格）
-            # ══════════════════════════════════════════════════════
-            scored = []
-            for cid, candidate in enumerate(candidates):
-                confidence, vote_trace = self._vote_on_candidate(problem, candidate, idx, cid)
-                scored.append({"content": candidate, "confidence": confidence})
-                trace.extend(vote_trace)
-
-            best = max(scored, key=lambda item: item["confidence"])
-            trace.append({
-                "step": "select_best",
-                "content": f"选定最佳候选 (confidence={best['confidence']:.2f}，共 {len(candidates)} 候选)",
+                "step": "reasoning_done",
+                "content": f"多轮推理完成，共 {cfg.reasoning_rounds} 轮。",
             })
 
             # ── 构建 final_response（FAQ Q120/Q118 要求完整解答，非仅 boxed 结论）──
-            best_text = best["content"]
             boxed_answer = extract_boxed(best_text)
 
             # is_proof 已在第②步后判定，此处直接复用
@@ -370,13 +408,13 @@ class ReasoningAgent:
             })
 
             # ══════════════════════════════════════════════════════
-            # ⑤ 教育启发（基于最佳候选）
+            # ⑤ 教育启发（基于最终解答）
             # ══════════════════════════════════════════════════════
             teach_msg = AgentMessage(
                 sender="user",
                 content=(
                     f"原题：{problem}\n"
-                    f"最佳解答：{best['content'][:1200]}\n"
+                    f"最终解答：{best_text[:1200]}\n"
                     "请生成教学启发。"
                 ),
             )
@@ -390,7 +428,7 @@ class ReasoningAgent:
             })
 
             elapsed = round(time.time() - t_start, 1)
-            trace.append({"step": "finalize", "content": f"耗时 {elapsed}s，confidence={best['confidence']:.2f}"})
+            trace.append({"step": "finalize", "content": f"耗时 {elapsed}s"})
 
             return {"final_response": final_response, "trace": trace}
 
@@ -400,6 +438,220 @@ class ReasoningAgent:
                 "content": f"{type(exc).__name__}: {exc}",
             })
             return {"final_response": "", "trace": trace}
+
+    # ── 解析引理摘要 ──
+    @staticmethod
+    def _parse_lemmas(text: str) -> List[str]:
+        """从摘要器输出中解析引理列表。"""
+        lemmas = []
+        for line in text.split("\n"):
+            line = line.strip()
+            if not line or line == "无" or line == "无。":
+                continue
+            # 匹配 "引理：..." 或 "引理1：..." 等格式
+            if "引理" in line and "：" in line:
+                # 取引理冒号后的内容，截断到合理长度
+                content = line.split("：", 1)[1].strip() if "：" in line else line
+                if len(content) > 5:
+                    lemmas.append(content[:200])
+        # 去重保序
+        seen = set()
+        unique = []
+        for l in lemmas:
+            if l not in seen:
+                seen.add(l)
+                unique.append(l)
+        return unique[:4]
+
+    # ── 多轮层次化推理（Intern-S1-MO 核心）──
+    def _multi_round_reason(
+        self, problem: str, analysis: str, strategy: str, idx: int, is_proof: bool
+    ) -> Tuple[str, List[Dict]]:
+        """多轮层次化推理：每轮「求解 → 摘要引理 → 复用引理继续深挖」。
+
+        对齐 Intern-S1-MO 的 reasoning → summarizer → verifier 循环：
+          - 第 1 轮：给出初步解答
+          - 中间轮：把上一轮结论压成引理，带着引理继续深挖
+          - 最后一轮：得出最终解
+        """
+        cfg = self.config
+        solver = self._solver_proof if is_proof else self._solver_compute
+        trace = []
+        lemmas: List[str] = []
+        current_solution = ""
+
+        for round_idx in range(cfg.reasoning_rounds):
+            is_final = (round_idx == cfg.reasoning_rounds - 1)
+
+            # ── 构造 prompt ──
+            if round_idx == 0:
+                prompt = (
+                    f"题目：\n{problem}\n\n"
+                    f"分析摘要：{analysis[:300]}\n"
+                    f"推荐策略：{strategy[:300]}\n\n"
+                    "请给出完整解答，在最后用 \\boxed{答案} 明确写出最终结果。"
+                )
+            else:
+                lemma_text = "\n".join(f"{i+1}. {l}" for i, l in enumerate(lemmas)) if lemmas else "(无)"
+                prompt = (
+                    f"题目：\n{problem}\n\n"
+                    f"你之前已经推导出以下关键结论（引理）：\n{lemma_text}\n\n"
+                    "请基于这些已证结论继续深入推理，完善并最终确定解答。"
+                    "不要重复推导已经确定的引理，直接在它们基础上推进。\n"
+                    "在最后用 \\boxed{答案} 明确写出最终结果。"
+                )
+
+            solve_msg = AgentMessage(sender="user", content=prompt)
+            # 中间轮关 thinking mode（省时间），最后一轮开启深度推理
+            round_thinking = is_final
+            response = solver(
+                solve_msg,
+                session_id=f"{idx}:round:{round_idx}",
+                temperature=cfg.solver_temperature,
+                max_tokens=cfg.solver_max_tokens,
+                thinking_mode=round_thinking,
+            )
+            current_solution = response.content
+
+            # ── 代码执行反馈（保留原有能力）──
+            code_blocks = extract_code_blocks(current_solution)
+            if code_blocks:
+                code_outputs = [execute_code(c, timeout=cfg.code_timeout) for c in code_blocks]
+                if code_outputs:
+                    feedback = "\n".join(f"[代码块 {i+1} 执行结果]:\n{out}" for i, out in enumerate(code_outputs))
+                    has_error = any(
+                        'error' in o.lower() or 'traceback' in o.lower() or 'indexerror' in o.lower()
+                        or 'typeerror' in o.lower() or 'syntaxerror' in o.lower() or 'nameerror' in o.lower()
+                        for o in code_outputs
+                    )
+                    if has_error:
+                        refine_prompt = (
+                            "你之前写的代码执行时遇到错误，请查看错误输出修正代码或改用解析方法，"
+                            "注意原题没有变化：\n\n" + feedback +
+                            "\n\n输出修正后的完整解答，最后用 \\boxed{答案} 给出结果。"
+                        )
+                    else:
+                        refine_prompt = (
+                            "以下是你的代码执行结果，请据此确认数值是否正确，如有误请修正：\n\n"
+                            + feedback +
+                            "\n\n输出完整解答，最后用 \\boxed{答案} 给出结果。"
+                        )
+                    refined = solver(
+                        AgentMessage(sender="user", content=refine_prompt),
+                        session_id=f"{idx}:round:{round_idx}:refine",
+                        temperature=0.1,
+                        max_tokens=cfg.solver_max_tokens,
+                        thinking_mode=False,
+                    )
+                    refined_text = refined.content
+                    # 防跑偏/防丢推导
+                    drifted = any(kw in refined_text for kw in ["假设题目", "缺少具体的", "没有提供", "如果您有具体"])
+                    if drifted:
+                        current_solution = current_solution + "\n\n[代码执行反馈]:\n" + feedback[:500]
+                    elif len(refined_text) < 100 and len(current_solution) > 200:
+                        rb = extract_boxed(refined_text)
+                        ob = extract_boxed(current_solution)
+                        if rb and ob:
+                            current_solution = current_solution.replace(ob, rb)
+                        else:
+                            current_solution = current_solution + "\n\n" + refined_text
+                    else:
+                        current_solution = refined_text
+
+            trace.append({
+                "step": f"round_{round_idx}",
+                "content": {
+                    "round": round_idx,
+                    "is_final": is_final,
+                    "lemmas_carried": len(lemmas),
+                    "response": current_solution[:2000],
+                },
+            })
+
+            # ── 非最后一轮：摘要成引理 + 验证引理（防错误传播）──
+            if not is_final:
+                summary_msg = AgentMessage(sender="user", content=current_solution[:3000])
+                summary = self._summarizer(
+                    summary_msg,
+                    session_id=f"{idx}:summary:{round_idx}",
+                    temperature=0.2,
+                    max_tokens=2048,
+                )
+                candidate_lemmas = self._parse_lemmas(summary.content)
+
+                # 逐条验证引理，只保留验证通过的
+                verified_lemmas = []
+                for lemma in candidate_lemmas:
+                    verify_msg = AgentMessage(
+                        sender="user",
+                        content=f"引理：{lemma}\n\n请判断这条引理是否正确。",
+                    )
+                    verdict_resp = self._lemma_verifier(
+                        verify_msg,
+                        session_id=f"{idx}:lemma_verify:{round_idx}:{len(verified_lemmas)}",
+                        temperature=0.0,
+                        max_tokens=512,
+                    )
+                    ok = is_correct_vote(verdict_resp.content)
+                    if ok:
+                        verified_lemmas.append(lemma)
+                    trace.append({
+                        "step": f"lemma_verify_{round_idx}",
+                        "content": {"lemma": lemma[:100], "verified": ok},
+                    })
+
+                if verified_lemmas:
+                    lemmas = verified_lemmas
+                trace.append({
+                    "step": f"summary_{round_idx}",
+                    "content": {"lemmas": lemmas},
+                })
+
+        # ── 最终过程验证 + 修正循环（Intern-S1-MO 的 process verifier）──
+        # 最后一轮解答做漏洞检查，FAIL 则反馈修正，最多 1 次
+        for fix_round in range(1):
+            verify_msg = AgentMessage(
+                sender="user",
+                content=f"题目：{problem}\n\n解答：{current_solution[:3000]}\n\n请检查是否有漏洞。",
+            )
+            verdict_resp = self._process_verifier(
+                verify_msg,
+                session_id=f"{idx}:process_verify",
+                temperature=0.0,
+                max_tokens=1024,
+            )
+            ok = is_correct_vote(verdict_resp.content)
+            trace.append({
+                "step": "process_verify",
+                "content": {"passed": ok, "feedback": verdict_resp.content[:200]},
+            })
+
+            if ok:
+                break
+            # FAIL：把 verifier 反馈交给 solver 修正
+            fix_prompt = (
+                f"题目：{problem}\n\n"
+                f"你的解答：{current_solution[:3000]}\n\n"
+                f"审查员指出以下问题：{verdict_resp.content[:500]}\n\n"
+                "请根据审查意见修正解答，在最后用 \\boxed{答案} 给出最终结果。"
+            )
+            fixed = solver(
+                AgentMessage(sender="user", content=fix_prompt),
+                session_id=f"{idx}:process_fix",
+                temperature=0.1,
+                max_tokens=cfg.solver_max_tokens,
+                thinking_mode=False,
+            )
+            fixed_text = fixed.content
+            drifted = any(kw in fixed_text for kw in ["假设题目", "缺少具体的", "没有提供", "如果您有具体"])
+            if not drifted:
+                current_solution = fixed_text
+            trace.append({
+                "step": "process_fix",
+                "content": {"fixed": not drifted, "response": current_solution[:2000]},
+            })
+
+        return current_solution, trace
 
     # ── 多候选生成（含代码执行反馈环 + 题型自适应）──
     def _generate_candidates(

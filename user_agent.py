@@ -196,7 +196,7 @@ class AgentConfig:
     vote_count: int = 2                # 每个候选答案的投票验证次数
 
     # ── 多轮层次化推理（Intern-S1-MO 核心）──
-    reasoning_rounds: int = 2          # 推理轮数（≥1），每轮：求解→摘要引理→验证→下一轮复用；2轮平衡耗时与深度
+    reasoning_rounds: int = 3          # 推理轮数（≥1），每轮：求解→摘要引理→验证→下一轮复用
 
     # ── 温度 ──
     analyzer_temperature: float = 0.1
@@ -504,14 +504,44 @@ class ReasoningAgent:
             solve_msg = AgentMessage(sender="user", content=prompt)
             # 中间轮关 thinking mode（省时间），最后一轮开启深度推理
             round_thinking = is_final
-            response = solver(
-                solve_msg,
-                session_id=f"{idx}:round:{round_idx}",
-                temperature=cfg.solver_temperature,
-                max_tokens=cfg.solver_max_tokens,
-                thinking_mode=round_thinking,
-            )
-            current_solution = response.content
+
+            # ── 最后一轮：多候选 + 投票选最优（叠加广度）；中间轮：单路快速推进 ──
+            if is_final and cfg.candidate_count > 1:
+                # 生成多个候选（不同 session 促进多样性）
+                final_candidates = []
+                for cid in range(cfg.candidate_count):
+                    resp = solver(
+                        solve_msg,
+                        session_id=f"{idx}:round:{round_idx}:cand:{cid}",
+                        temperature=cfg.solver_temperature,
+                        max_tokens=cfg.solver_max_tokens,
+                        thinking_mode=True,
+                    )
+                    final_candidates.append(resp.content)
+
+                # 对每个候选投票，选 confidence 最高
+                scored = []
+                for cid, cand in enumerate(final_candidates):
+                    confidence, _ = self._vote_on_candidate(problem, cand, idx, cid)
+                    scored.append((cand, confidence))
+                scored.sort(key=lambda x: x[1], reverse=True)
+                current_solution = scored[0][0]
+                trace.append({
+                    "step": f"round_{round_idx}_voting",
+                    "content": {
+                        "candidate_count": cfg.candidate_count,
+                        "scores": [round(s, 2) for _, s in scored],
+                    },
+                })
+            else:
+                response = solver(
+                    solve_msg,
+                    session_id=f"{idx}:round:{round_idx}",
+                    temperature=cfg.solver_temperature,
+                    max_tokens=cfg.solver_max_tokens,
+                    thinking_mode=round_thinking,
+                )
+                current_solution = response.content
 
             # ── 代码执行反馈（保留原有能力）──
             code_blocks = extract_code_blocks(current_solution)

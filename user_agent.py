@@ -196,7 +196,7 @@ class AgentConfig:
     vote_count: int = 2                # 每个候选答案的投票验证次数
 
     # ── 多轮层次化推理（Intern-S1-MO 核心）──
-    reasoning_rounds: int = 3          # 推理轮数（≥1），每轮：求解→摘要引理→验证→下一轮复用
+    reasoning_rounds: int = 4          # 推理轮数（≥1），每轮：求解→摘要引理→验证→下一轮复用
 
     # ── 温度 ──
     analyzer_temperature: float = 0.1

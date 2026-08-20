@@ -483,38 +483,22 @@ class ReasoningAgent:
         for round_idx in range(cfg.reasoning_rounds):
             is_final = (round_idx == cfg.reasoning_rounds - 1)
 
-            # ── 构造 prompt（对齐 Intern-S1-MO 的 Lemma Search：中间轮拥抱部分解）──
-            lemma_text = "\n".join(f"{i+1}. {l}" for i, l in enumerate(lemmas)) if lemmas else "(无)"
+            # ── 构造 prompt ──
             if round_idx == 0:
-                # 第 1 轮：初始探索，允许部分严格结论（对抗「提前结论偏置」）
                 prompt = (
                     f"题目：\n{problem}\n\n"
                     f"分析摘要：{analysis[:300]}\n"
                     f"推荐策略：{strategy[:300]}\n\n"
-                    "请开始严谨地求解本题。推导的正确性优先于凑出最终答案。\n"
-                    "如果能够完整求解，请给出完整解答；如果暂时无法完整求解，"
-                    "请给出你能严格证明的部分结论（关键引理、某类情形的证明、某个上下界等），"
-                    "不要猜测、不要留下逻辑缺口。\n"
-                    "在最后用 \\boxed{答案} 明确写出最终结果（若已得出）。"
-                )
-            elif is_final:
-                # 最后一轮：串联引理，给出完整最终解答
-                prompt = (
-                    f"题目：\n{problem}\n\n"
-                    f"你在前几轮已经严格证明以下关键结论（引理）：\n{lemma_text}\n\n"
-                    "现在请基于这些已证结论，给出完整、严谨的最终解答。\n"
-                    "把引理串联起来，补齐剩余步骤，得出最终答案，不要遗漏关键推导。\n"
-                    "在最后用 \\boxed{答案} 明确写出最终结果。"
+                    "请给出完整解答，在最后用 \\boxed{答案} 明确写出最终结果。"
                 )
             else:
-                # 中间轮：在已证引理上推进，产出新的可复用中间结论（部分解）
+                lemma_text = "\n".join(f"{i+1}. {l}" for i, l in enumerate(lemmas)) if lemmas else "(无)"
                 prompt = (
                     f"题目：\n{problem}\n\n"
-                    f"你之前已经严格证明以下关键结论（引理）：\n{lemma_text}\n\n"
-                    "请基于这些已证结论继续推进，产出新的可复用中间结论。\n"
-                    "不要重复推导已经确定的引理。\n"
-                    "如果暂时无法得出完整解答，请给出你能严格证明的新部分结论，不要猜测、不要留下逻辑缺口。\n"
-                    "在最后用 \\boxed{答案} 明确写出最终结果（若已得出）。"
+                    f"你之前已经推导出以下关键结论（引理）：\n{lemma_text}\n\n"
+                    "请基于这些已证结论继续深入推理，完善并最终确定解答。"
+                    "不要重复推导已经确定的引理，直接在它们基础上推进。\n"
+                    "在最后用 \\boxed{答案} 明确写出最终结果。"
                 )
 
             solve_msg = AgentMessage(sender="user", content=prompt)

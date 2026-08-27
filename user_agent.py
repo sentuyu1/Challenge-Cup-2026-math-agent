@@ -338,6 +338,21 @@ class ReasoningAgent:
             except Exception:
                 pass
 
+            # ── 客观题知识卡片注入（移植自 LangGraph：客观题凭记忆猜，注入概念定义）──
+            try:
+                _is_obj = (
+                    re.search(r"正确的是|正确的说法|下列说法|下列.*正确|判断|是否正确", problem)
+                    or re.search(r"[A-E][\.、]\s*[^\n]{0,40}\n?[A-E][\.、]", problem)
+                )
+                if _is_obj:
+                    from knowledge_cards import KnowledgeCards
+                    _cards = KnowledgeCards().retrieve(problem, "数学", max_cards=6)
+                    if _cards:
+                        problem = f"{problem}\n\n参考知识卡片：\n{_cards}"
+                        trace.append({"step": "objective_cards", "content": "注入客观题知识卡片"})
+            except Exception:
+                pass
+
             # ══════════════════════════════════════════════════════
             # ① 问题分析
             # ══════════════════════════════════════════════════════

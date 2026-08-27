@@ -328,6 +328,16 @@ class ReasoningAgent:
         cfg = self.config
 
         try:
+            # ── 确定性求解器：sympy/scipy 直接算整题答案（零 LLM 成本，移植自 LangGraph）──
+            try:
+                from deterministic_solver import deterministic_solve
+                det_answer = deterministic_solve(problem)
+                if det_answer:
+                    trace.append({"step": "deterministic_solve", "answer": det_answer})
+                    return {"final_response": det_answer, "trace": trace}
+            except Exception:
+                pass
+
             # ══════════════════════════════════════════════════════
             # ① 问题分析
             # ══════════════════════════════════════════════════════

@@ -418,28 +418,35 @@ class ReasoningAgent:
                 "content": f"多轮推理完成，共 {cfg.reasoning_rounds} 轮。",
             })
 
-            # ── 构建 final_response（判分保护：只放干净答案，关键步骤进 trace）──
-            from answer_clean import clean_answer, clean_noise_head, salvage_conclusion
+            # ── 构建 final_response（判分保护：折叠桌 Finalizer 多层提取 + 结构验证）──
             boxed_answer = extract_boxed(best_text)
 
             if is_proof:
-                # 证明题：过程即答案，返回完整解答（judger 需要判断推理过程是否合理）
-                if len(best_text) < 8000:
-                    final_response = best_text
-                else:
+                # 证明题：过程即答案，只做展示级清理（去代码围栏/LaTeX 归一化/去引号）
+                from finalizer import Finalizer
+                final_response = Finalizer.extract_solution(best_text)
+                if len(final_response) >= 8000:
                     # 过长时保留关键头尾
-                    final_response = best_text[:4000] + "\n\n... (中间过程省略) ...\n\n" + best_text[-4000:]
+                    final_response = final_response[:4000] + "\n\n... (中间过程省略) ...\n\n" + final_response[-4000:]
             else:
-                # 计算题/填空题：只放干净答案（剥标签、去噪声、剥口癖），关键步骤进 trace
-                raw_answer = boxed_answer or extract_final_answer(best_text)
-                final_response = clean_answer(raw_answer)
-                # 部分结论兜底：从推导尾部捞回「所以 xxx」的结论（不交白卷）
+                # 计算题/填空：Finalizer 7 层提取 + 11 种结构验证 + 候选选优
+                from finalizer import Finalizer
+                _fr = Finalizer.extract_result(best_text)
+                # 显式答案（标签/boxed/尾部结论）直接用；whole_response/无效则走旧逻辑二次干净化
+                final_response = _fr.answer if (_fr.valid and _fr.method != "whole_response") else ""
+                if final_response:
+                    trace.append({"step": "finalizer", "content": _fr.method})
+                # 兜底链：Finalizer 未给显式答案时，用旧逻辑捞回 + 剥口癖（不交白卷）
                 if not final_response:
-                    final_response = clean_answer(salvage_conclusion(best_text))
-                if not final_response:
-                    final_response = clean_noise_head((best_text or "").strip()[-300:])
-                if not final_response:
-                    final_response = "未能提取答案"
+                    from answer_clean import clean_answer, clean_noise_head, salvage_conclusion
+                    raw_answer = boxed_answer or extract_final_answer(best_text) or _fr.answer
+                    final_response = clean_answer(raw_answer)
+                    if not final_response:
+                        final_response = clean_answer(salvage_conclusion(best_text))
+                    if not final_response:
+                        final_response = clean_noise_head((best_text or "").strip()[-300:])
+                    if not final_response:
+                        final_response = "未能提取答案"
                 trace.append({"step": "key_steps", "content": best_text[:2000]})
 
             final_response = final_response.strip()

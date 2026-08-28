@@ -503,10 +503,20 @@ class ReasoningAgent:
 
             # ── 构造 prompt ──
             if round_idx == 0:
+                # 漏解检测：题面含「Find all / 求所有」时注入「列出全部解」提示
+                missing_note = ""
+                if re.search(r"find all|all possible|all functions|all pairs|all values|"
+                             r"求所有|所有可能|全部|all real|all positive", problem, re.IGNORECASE):
+                    missing_note = (
+                        "\n\n注意：本题要求列出**全部**解/对象。请逐一核对是否漏掉其他解、"
+                        "特殊情形或边界值——多个根、多个函数族、完整区间或范围都要列全，"
+                        "不要只给其中一个。"
+                    )
                 prompt = (
                     f"题目：\n{problem}\n\n"
                     f"分析摘要：{analysis[:300]}\n"
-                    f"推荐策略：{strategy[:300]}\n\n"
+                    f"推荐策略：{strategy[:300]}"
+                    f"{missing_note}\n\n"
                     "请给出完整解答，在最后用 \\boxed{答案} 明确写出最终结果。"
                 )
             else:

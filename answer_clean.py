@@ -62,8 +62,19 @@ def clean_noise_head(text: str) -> str:
     return t
 
 
+# Unicode 上标（^ 转上标，对齐标准答案格式 2^a → 2ᵃ）
+_SUP_DIGITS = str.maketrans("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹")
+_SUP_LETTERS = str.maketrans("abcxyz", "ᵃᵇᶜˣʸᶻ")
+
+
+def _superscript_pow(s: str) -> str:
+    """把 2^a / 2^{a} 转成 2ᵃ。"""
+    return re.sub(r"\^\{?([a-zA-Z0-9]+)\}?",
+                  lambda m: m.group(1).translate(_SUP_LETTERS).translate(_SUP_DIGITS), s)
+
+
 def clean_answer(text: str) -> str:
-    """答案干净化：剥标签 → 检测失败声明/占位 → 去噪声头。
+    """答案干净化：剥标签 → 检测失败声明/占位 → 去噪声头 → 格式规范化。
 
     返回干净答案；若答案是「无法确定」/占位/噪声，返回空串（触发上游兜底）。
     """
@@ -72,4 +83,18 @@ def clean_answer(text: str) -> str:
         return ""
     if is_placeholder_answer(t):
         return ""
-    return clean_noise_head(t)
+    t = clean_noise_head(t)
+    # 剥离 LaTeX 定界符（"$C=2$" → "C=2"，"$$k=2025$$" → "k=2025"）
+    t = t.replace("$$", " ").replace("$", " ").strip()
+    # 提取 "= 值"（"C=2" → "2"，"k=2025" → "2025"）
+    if "=" in t:
+        rhs = t.rsplit("=", 1)[-1].strip()
+        rhs = re.split(r"[。；;，,\n]", rhs)[0].strip()
+        rhs = rhs.replace(r"\cdot", "·").replace(r"\;", " ")
+        if rhs and re.search(r"\d", rhs):
+            return _superscript_pow(rhs).strip()
+    # 从叙述提取单个数值（"所求数量为4个" → "4"）
+    m = re.search(r"(?:数量|个数|数目|共|为|是|约|值为|等于)\s*([+-]?\d+(?:\.\d+)?)", t)
+    if m and re.search(r"(?:数量|个数|数目|秒|种|组|个|值为|等于)", t):
+        return m.group(1)
+    return t

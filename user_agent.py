@@ -206,7 +206,7 @@ class AgentConfig:
     teacher_temperature: float = 0.8
 
     # ── max_tokens ──
-    solver_max_tokens: int = 32768    # 深度思考输出长，16384 曾截断(官方评测202次)；32768 现已验证不超上限
+    solver_max_tokens: int = 16384    # 已验证安全（32768 本地触发深度思考慢+放弃，回退）
     analyzer_max_tokens: int = 512
     strategist_max_tokens: int = 512
     voter_max_tokens: int = 1024

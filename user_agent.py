@@ -338,6 +338,16 @@ class ReasoningAgent:
             except Exception:
                 pass
 
+            # ── ICMA 相似检索（仿 RAG）：检索同源近似题，注入解析借方法（不直接抄结论）──
+            _reference = ""
+            try:
+                from icma_rag import rag_reference_block
+                _reference = rag_reference_block(problem)
+                if _reference:
+                    trace.append({"step": "icma_rag", "content": "检索到相似题，注入参考解析"})
+            except Exception:
+                _reference = ""
+
             # ── 确定性求解器：sympy/scipy 直接算整题答案（零 LLM 成本，移植自 LangGraph）──
             try:
                 from deterministic_solver import deterministic_solve
@@ -389,7 +399,7 @@ class ReasoningAgent:
             # ══════════════════════════════════════════════════════
             # ③ 多轮层次化推理（Intern-S1-MO 核心：推理→摘要引理→复用）
             # ══════════════════════════════════════════════════════
-            best_text, reason_trace = self._multi_round_reason(problem, analysis, strategy, idx, is_proof)
+            best_text, reason_trace = self._multi_round_reason(problem, analysis, strategy, idx, is_proof, _reference)
             trace.extend(reason_trace)
 
             trace.append({
@@ -494,7 +504,8 @@ class ReasoningAgent:
 
     # ── 多轮层次化推理（Intern-S1-MO 核心）──
     def _multi_round_reason(
-        self, problem: str, analysis: str, strategy: str, idx: int, is_proof: bool
+        self, problem: str, analysis: str, strategy: str, idx: int, is_proof: bool,
+        reference: str = "",
     ) -> Tuple[str, List[Dict]]:
         """多轮层次化推理：每轮「求解 → 摘要引理 → 复用引理继续深挖」。
 
@@ -524,7 +535,8 @@ class ReasoningAgent:
                         "不要只给其中一个。"
                     )
                 prompt = (
-                    f"题目：\n{problem}\n\n"
+                    f"题目：\n{problem}\n"
+                    f"{reference}"
                     f"分析摘要：{analysis[:300]}\n"
                     f"推荐策略：{strategy[:300]}"
                     f"{missing_note}\n\n"

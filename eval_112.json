@@ -1,0 +1,562 @@
+[
+ {
+  "idx": 0,
+  "problem": "Let S be the set of all ordered pairs (x, y) of nonnegative integers 0 ≤ x ≤ 19 and 0 ≤ y ≤ 2. Compute the number of permutations (x₁, y₁), (x₂, y₂),..., (x₆₀, y₆₀) of the elements of S such that - y₁ = 2 and y₆₀ = 0; - for all nonnegative integers 1 ≤ i ≤ 59, exactly one of the following holds: - xᵢ = xᵢ₊₁ and |yᵢ - yᵢ₊₁| = 1, - yᵢ = yᵢ₊₁ and xᵢ - xᵢ₊₁ is -1 or 19.",
+  "answer": "20460"
+ },
+ {
+  "idx": 1,
+  "problem": "Let m≥ 3 be an integer. An m-tuple of real numbers (a₁,a₂,…,aₘ) is said to be Sparkling if for each permutation b₁,b₂,…,bₘ of these numbers we have b₁ b₂ +b₂ b₃ +…+bₘ₋₁bₘ≥-4. Find the largest constant T=T(m) such that the inequality Σ₁≤ₚ<q≤ₘcₚ cq ≥ T holds for all sparkling tuples (c₁,c₂,…,cₘ).",
+  "answer": "2-2m"
+ },
+ {
+  "idx": 2,
+  "problem": "For a real number T, it is said that no matter how five distinct positive real numbers a, b, c, d, e are given, it is possible to choose four distinct numbers e, f, g, h from them such that |ef-gh|≤ Tfh. Find the minimum value of T for which this is possible.",
+  "answer": "1/2"
+ },
+ {
+  "idx": 3,
+  "problem": "Let a₀, a₁, … be a sequence of non-negative integers. Suppose that for all non-negative integers p, aₐₐₚ = aₚ₊₁ + 1. Find all possible value of a₂₀₂₅.",
+  "answer": "2026, 2030"
+ },
+ {
+  "idx": 4,
+  "problem": "Find the minimum value of an integer N that satisfies the following condition: Given 2025 non-degenerate triangles, each triangle has one side colored green, one side colored purple, and one side colored orange. Let the lengths of the green sides be g₁ ≥ g₂ ≥ … ≥ g₂₀₂₅, the lengths of the purple sides be p₁ ≥ p₂ ≥ … ≥ p₂₀₂₅, and the lengths of the orange sides be o₁ ≥ o₂ ≥ … ≥ o₂₀₂₅. Then, the number of 1 ≤ a ≤ 2025 such that gₐ, pₐ, oₐ do not form the sides of a triangle is always less than or equal to N.",
+  "answer": "2024"
+ },
+ {
+  "idx": 5,
+  "problem": "A function C from the set of positive integers to itself is called \"nice\" if for all positive integers a, b, C(a+b) - C(a) - C(C(b)) + 1 ≥ 0. Find all possible values of C(1234) for a nice function C: ℕ → ℕ.",
+  "answer": "1,2,…, 1235"
+ },
+ {
+  "idx": 6,
+  "problem": "Find all functions A:ℝ→ℝ such that A(p)A(q)+A(-pq)=A(p+q)+2pq+1 holds for all real numbers p and q.",
+  "answer": "A(x)=1-x, A(x)=1+2x, A(x)=1-x²"
+ },
+ {
+  "idx": 7,
+  "problem": "Suppose that a function f:ℚ→F₂ satisfies f(r)+f(r')=1 for all distinct rational numbers r, r' satisfying either r+r'=0 or r+r'=1 or rr'=1. Suppose further that f(11/3)=1. Evaluate f(7/3)+f(11/4)+f(2024/5)+f(109/11)+f(3/71)+f(5/204)",
+  "answer": "1"
+ },
+ {
+  "idx": 8,
+  "problem": "Find the maximum value of D satisfying the following condition: There exists an infinite sequence x₁, x₂, … where each term belongs to [0, 777] such that for all positive integers m < n, we have (m+n)|xₙ² - xₘ²| ≥ D.",
+  "answer": "603729"
+ },
+ {
+  "idx": 9,
+  "problem": "We call g: ℝ → ℝ a good function if g satisfies all the following conditions: (1) For any two distinct real numbers a, b, if g(ab) = 0, then g(a) = 0 or g(b) = 0. (2) For any two distinct real numbers a, b, if g(ab) ≠ 0, then (g(a)-g(b))/(a-b)=g(a)g(b)/(g(ab)). (3) g(1)=1 Let S={2ᵃ 3ᵇ 5ᶜ 7ᵈ: a,b,c,d∈ ℤ} and we call h:S→ ℝ an essential function if there exists a good function g such that h(x)=g(x) for all x∈ S. Find the number of essential functions.",
+  "answer": "16"
+ },
+ {
+  "idx": 10,
+  "problem": "Let p, q, r, s be constants such that the equation py³ + qy² + ry + s = 0 has three distinct real roots. Find all possible values for the number of distinct real roots of the equation (pz³+qz²+rz+s)(6pz+2q)=(3pz²+2qz+r)².",
+  "answer": "2"
+ },
+ {
+  "idx": 11,
+  "problem": "Find all f ∈ ℂ[x,y] such that for all complex numbers a, b, f(a²,b²)=f(((a-b)²)/2, ((a+b)²)/2).",
+  "answer": "f(x,y)= g(x+y, xy(x-y)²) for some polynomial g"
+ },
+ {
+  "idx": 12,
+  "problem": "We call a real number x 'mysterious' if it is a solution to A(x) = 1/(3√(3))x for some polynomial A(x) with rational coefficients. Find all polynomials A(x) with rational coefficients of lowest possible degree such that 3√(3) + 3√(9) is mysterious.",
+  "answer": "A(x)=1/2(x²-x-4)"
+ },
+ {
+  "idx": 13,
+  "problem": "Find the minimal d satisfying the following property: For any sequence of integers x₁, x₂, …, xₙ satisfying 0 ≤ xᵢ ≤ 100, Σᵢ₌₁ⁿ xᵢ ≥ 1810 for all i = 1, 2, …, n, there exists a subset I of {1,2, …, n} such that | Σᵢ∈Ixᵢ - 1810 | ≤ d.",
+  "answer": "48"
+ },
+ {
+  "idx": 14,
+  "problem": "A sequence of integers a₀, …, a₁₀₀₀ is called a good sequence if there exists a sequence of integers b₀, …, b₁₀₀₀ such that ∏ₖ₌₀¹⁰⁰⁰ (x - aₖ) = ∏ₖ₌₀¹⁰⁰⁰ (x - k)ᵇₖ, ∏ₖ₌₀¹⁰⁰⁰ (x - bₖ) = ∏ₖ₌₀¹⁰⁰⁰ (x - k)ᵃₖ for all x. Find all the possible values of Σᵢ₌₀¹⁰⁰⁰ (i+1)aᵢ² for good sequences a₀, …, a₁₀₀₀.",
+  "answer": "997008, 995026, 995018"
+ },
+ {
+  "idx": 15,
+  "problem": "Find all positive integers n satisfying the following condition. For any positive integer d ≤ n and a polynomial Q(x) with integer coefficients and of degree less than d, there exists a positive integer k ≤ n, and k + 1 distinct integers a₁, …, aₖ₊₁ such that Q(aₖ₊₁) - Σᵢ₌₁ᵏ Q(aᵢ) = aₖ₊₁ᵈ - Σᵢ₌₁ᵏ aᵢᵈ.",
+  "answer": "2"
+ },
+ {
+  "idx": 16,
+  "problem": "Find the smallest positive integer n such that there exist real numbers x₁, …, xₙ between -1 and 1 satisfying Σᵢ₌₁ⁿ xᵢ² + (Σᵢ₌₁ⁿ xᵢ)² = 20, |x₁ + … + xₙ| < 1.",
+  "answer": "21"
+ },
+ {
+  "idx": 17,
+  "problem": "Find number of triples (x,y,z) of real numbers satisfying x² + y² + z² = xy³ + yz³ + zx³ = 3.",
+  "answer": "8"
+ },
+ {
+  "idx": 18,
+  "problem": "Determine the number of natural numbers n that that has at most 16 digits satisfying the following conditions: i) 3|n. ii) The digits of n in decimal representation are in the set {2,0,1,8}.",
+  "answer": "1431655765"
+ },
+ {
+  "idx": 19,
+  "problem": "Two players, Boris and Natasha, play the following game on an infinite grid of unit squares, all initially colored white. The players take turns starting with Boris. On Boris's turn, Boris selects one white unit square and colors it blue. On Natasha's turn, Natasha selects two white unit squares and colors them red. The players alternate until Boris decides to end the game. At this point, Boris gets a score, given by the number of unit squares in the largest simple polygon containing only blue unit squares and some yellow unit squares. What is the largest score Boris can guarantee?",
+  "answer": "4"
+ },
+ {
+  "idx": 20,
+  "problem": "A domino is a 2 × 1 or 1 × 2 tile. A mysterious puzzle involves placing exactly k² dominoes on a 2k × 2k chessboard without overlapping. The placement must satisfy a peculiar condition: every 2 × 2 square on the board contains at least two uncovered unit squares that lie in the same row or column. Determine in how many ways the dominoes can be placed according to these rules.",
+  "answer": "C(2k,k)²"
+ },
+ {
+  "idx": 21,
+  "problem": "Suppose there are 40 professional baseball teams participating in a tournament. In each round of the game, we will divide the 40 teams into 20 pairs, and each pair plays the game at the same time. After the tournament, it is known that every two teams have played at most one game. Find the smallest positive integer a, so that we can arrange a schedule satisfying the above conditions, and if we take one more round, there is always a pair of teams who have played in the game.",
+  "answer": "21"
+ },
+ {
+  "idx": 22,
+  "problem": "Consider a regular hexagon with side length 100 that is divided into equilateral triangles with side length 1 by lines parallel to its sides. Additionally, there are two circles with radii 99 and 101, respectively. Find the number of regular hexagons all of whose vertices are among the vertices of the equilateral triangles of the regular hexagon with side length 100.",
+  "answer": "25502500"
+ },
+ {
+  "idx": 23,
+  "problem": "Alice and Bob play a game on a board consisting of one row of 2020 consecutive squares. They take turns placing tiles that cover two adjacent squares, with Alice going first. By rule, a tile must not cover a square that is already covered by another tile. The game ends when no tile can be placed according to this rule. Alice's goal is to maximize the number of uncovered squares when the game ends; Bob's goal is to minimize it. What is the greatest number of uncovered squares that Alice can ensure at the end of the game, no matter how Bob plays?",
+  "answer": "290"
+ },
+ {
+  "idx": 24,
+  "problem": "Two rational numbers m/n and n/m are written on a blackboard, where m and n are relatively prime positive integers. At any point, Lin may pick two of the numbers x and y written on the board and write either their arithmetic mean (x+y)/2 or their harmonic mean 2xy/(x+y) on the board as well. For a pair (m,n) such that Lin can write 1 on the board in finitely many steps, find the largest value of m+n knowing that m+n < 3000.",
+  "answer": "2048"
+ },
+ {
+  "idx": 25,
+  "problem": "We call a rectangle of the size 1 × 2 a domino. Rectangle of the 2 × 3 removing two opposite (under center of rectangle) corners we call S-tetramino. These figures can be rotated. A rectangle of the size 2 × 4 removing two opposite (under center of rectangle) corners we call L-hexamino. These figures can be rotated. It requires to tile rectangle of size 1008 × 1010 by using dominoes and S-tetraminoes. What is the minimal number of dominoes should be used?",
+  "answer": "506"
+ },
+ {
+  "idx": 26,
+  "problem": "A cube with size 18 × 18 × 18 consists of 5832 unit cubes, all colored white. Anton and Berta play a game on this cube. Anton chooses some pillars with size 1× 1× 18 such that no two pillars share a vertex or side, and turns all chosen unit cubes to black. Berta is allowed to choose some unit cubes and ask Anton their colors. In addition, Anton also tells Berta that he painted at least two pillars. How many unit cubes, at least, that Berta need to choose so that for any answer from Anton, Berta can always determine the black unit cubes?",
+  "answer": "486"
+ },
+ {
+  "idx": 27,
+  "problem": "Let γ ≥ 1 be a real number. Sun Wukong and the Sea God play a turn-based game on an infinite grid of unit squares. Before the game starts, the Sea God chooses a finite number of cells to be flooded with seawater. Sun Wukong is building a magical barrier, which is a subset of unit edges of the grid (called walls) forming a connected, non-self-intersecting path or loop. Additionally, there is a magical artifact that randomly generates a finite number of extra walls on the grid, with no specific pattern or distribution. The game then begins with Sun Wukong moving first. On each of Sun Wukong's turns, he adds one or more walls to the magical barrier, as long as the total length of the barrier is at most γ n after his nth turn. On each of the Sea God's turns, every cell which is adjacent to an already flooded cell and with no wall between them becomes flooded as well. Sun Wukong wins if the magical barrier forms a closed loop such that all flooded cells are contained in the interior of the loop — hence stopping the flood and saving the world. What is the largest constant C such that for all γ > C can Sun Wukong guarantee victory in a finite number of turns no matter how the Sea God chooses the initial cells to flood?",
+  "answer": "2"
+ },
+ {
+  "idx": 28,
+  "problem": "A classroom contains 68 pairs of nonzero integers. Suppose that for each positive integer k at most one of the pairs (k, k) and (-k, -k) is written on the classroom board. A student erases some of the 136 integers, subject to the condition that no two erased integers may add to 0. The student then scores one point for each of the 68 pairs in which at least one integer is erased. Additionally, the classroom has another broken whiteboard, and some integers might be invisible. Determine, with proof, the largest number N of points that the student can guarantee to score regardless of which 68 pairs have been written on the board.",
+  "answer": "43"
+ },
+ {
+  "idx": 29,
+  "problem": "Let a, b, c be positive integers. A three-dimensional grid is defined by the set of points Q={(x, y, z)∈ ℤ³: 0 ≤ x ≤ a, 0 ≤ y ≤ b, 0 ≤ z ≤ c }. Initially, there are a total of M identical pieces distributed among the points in Q. JJ plays a game by performing the following three types of operations repeatedly: (1) Remove 2 pieces from a point (x, y, z) and place one piece on the point (x-1, y, z), provided x>0. (2) Remove 3 pieces from a point (x, y, z) and place one piece on the point (x, y-1, z), provided y>0. (3) Remove 5 pieces from a point (x, y, z) and place one piece on the point (x, y, z-1), provided z>0. Find the smallest positive integer M such that, regardless of the initial distribution of the pieces, one can always perform a sequence of operations to place at least one piece on the point (0,0,0).",
+  "answer": "2ᵃ 3ᵇ 5ᶜ"
+ },
+ {
+  "idx": 30,
+  "problem": "Let S be a subset of 2012 points on the plane with these conditions: i) There does not exist 2012 lines in the plane such that every element of S lies on at least one of them. Additionally, there does not exist any circle passing through every element of S. ii) for all X ∈ S there exists 2012 lines in the plane such that every element of S - {X} lies on at least one of them. Find the maximum possible value of | S|.",
+  "answer": "2027091"
+ },
+ {
+  "idx": 31,
+  "problem": "The unit squares of an 2025 × 2025 chessboard are coloured alternately black and white, with the four corners coloured black. An L-tromino is a shape consisting of three unit squares connected in the shape of the letter L. A mysterious alien spaceship has landed on Earth and the aliens have brought with them a variety of L-trominos of various sizes and orientations. Is it possible to cover all the black squares with non-overlapping L-trominos? If it is possible, what is the minimum number of L-trominos needed?",
+  "answer": "1026169"
+ },
+ {
+  "idx": 32,
+  "problem": "Two players A and B are playing a game by taking turns writing numbers from the set {1, …, N} on a blackboard, where N is a positive integer. Player A starts the game by writing the number 1. If a player writes the number n, then the other player can write either n+1 or 2n, provided the number does not exceed N. The player who writes the number N wins. We say that N is of type A if player A has a winning strategy, and of type B if player B has a winning strategy. The game board is made of a special type of wood imported from Brazil. Find the least N > 400 such that it is a type B number.",
+  "answer": "512"
+ },
+ {
+  "idx": 33,
+  "problem": "In a research lab, scientists are studying the spread of a newly discovered bacteria on a 64 × 64 square petri dish. The dish is divided into small square sections, each of which is a 1 × 1 square and is either infected (black) or sterile (white). Initially, there are exactly k infected sections, and the rest are sterile. Scientists observe that the bacteria spread according to two specific growth rules: 1) If a 2 × 2 square section has exactly three infected sections, the last sterile section gets infected. 2) If a 2 × 2 square has exactly two infected sections, the infection mutates—infected sections become sterile, and sterile sections become infected. The researchers want to determine the smallest number of initially infected sections, k, such that no matter how the infection starts, it will always be possible to spread the bacteria to the entire dish after a sequence of growth and mutation cycles. What is the smallest such k that guarantees a full infection?",
+  "answer": "1057"
+ },
+ {
+  "idx": 34,
+  "problem": "Consider a checkerboard consisting of 38 by 38 unit squares. At the midpoints of some of these unit squares, there is an ant. At time 0, each ant starts moving with speed 1 parallel to some edge of the checkerboard. When two ants moving in opposite directions meet, they both turn 90° clockwise and continue moving with speed 1. When more than two ants meet, or when two ants moving in perpendicular directions meet, the ants continue moving in the same direction as before they met. When an ant reaches one of the edges of the checkerboard, it falls off and will not re-appear. Also, there are some spiders on the checkerboard that do not move at all. Considering all possible starting positions, determine the latest possible moment at which the last ant falls off the checkerboard or prove that such a moment does not necessarily exist.",
+  "answer": "56"
+ },
+ {
+  "idx": 35,
+  "problem": "On a large chessboard of 2011 by 2011 squares, a finite number of square tiles are placed. Each tile covers a square area of 52 by 52 cells. In each cell, the number of tiles covering it is written, and the maximum number k of cells containing the same nonzero number is recorded. Considering all possible tile configurations, what is the largest possible value of k?",
+  "answer": "3986729"
+ },
+ {
+  "idx": 36,
+  "problem": "In the plane, 2025 red points and 2026 blue points are marked so that no three of the marked points are collinear. One needs to draw k lines not passing through the marked points and dividing the plane into several regions. The goal is to do it in such a way that no region contains points of both colors. Find the minimal value of k such that the goal is attainable for every possible configuration of 4051 points.",
+  "answer": "2025"
+ },
+ {
+  "idx": 37,
+  "problem": "A card deck consists of 1024 cards. On each card, a set of distinct decimal digits is written in such a way that no two of these sets coincide, including an empty card. Two players alternately take cards from the deck, one card per turn. After the deck is empty, each player checks if he can throw out one of his cards so that each of the ten digits occurs on an even number of his remaining cards. If one player can do this but the other one cannot, the one who can is the winner; otherwise, a draw is declared. However, there is also a third player who is observing the game and has a special card with a set of distinct decimal digits written on it. This third player does not participate in the game. Determine all possible first moves of the first player after which the opponent has a winning strategy.",
+  "answer": "taking the empty card"
+ },
+ {
+  "idx": 38,
+  "problem": "A sequence of positive integers a₁, a₂, …, aₙ is called a Korean sequence if it satisfies the following conditions: - a₁ < a₂ < … < aₙ - For each 1 ≤ k < n, we define two sets Aₖ = {a₁, a₂, …, aₖ} and Bₖ = {aₖ₊₁, aₖ₊₂, …, aₙ}. A partition (Aₖ, Bₖ) is called good if the least common multiple of the elements in Aₖ is equal to the greatest common divisor of the elements in Bₖ. Determine the minimum value of n such that there exists a Korean sequence of length n with exactly 2015 good partitions.",
+  "answer": "3024"
+ },
+ {
+  "idx": 39,
+  "problem": "Two players, Alice and Bob, play a game in which they take turns choosing positive integers less than or equal to a positive integer n. The rules of the game are: (i) A player cannot choose a number that has been chosen by either player on any previous turn. (ii) A player cannot choose a number consecutive to any of those the player has already chosen on any previous turn. (iii) The game is a draw if all numbers have been chosen; otherwise the player who cannot choose a number anymore loses the game. Alice takes the first turn. Find the largest value of n such that the game ends in a draw.",
+  "answer": "6"
+ },
+ {
+  "idx": 40,
+  "problem": "Suppose we have a 194 × 194 board and we want to mark some cells on this board. Determine the smallest positive integer k such that it is possible to mark k cells on the board in a way that there exists a unique partition of the board into 1 × 2 and 2 × 1 dominoes, where none of the dominoes contains two marked cells.",
+  "answer": "194"
+ },
+ {
+  "idx": 41,
+  "problem": "A large 45 × 45 × 45 cube is composed of 45³ smaller unit cubes. Each unit cube is painted with one color. For each 45 × 45 × 1 rectangular prism consisting of n² unit cubes (of any of the three possible orientations), we consider the set of distinct colors present in that prism. A mischievous gnome, known for rearranging things, has decided to play a prank. He rearranges the colors of the unit cubes such that the set of colors in any 45 × 45 × 1 prism in one orientation appears in an 45 × 45 × 1 prism in each of the other two orientations. Determine the maximal possible number of colors that are present in the large cube after the gnome's antics.",
+  "answer": "31395"
+ },
+ {
+  "idx": 42,
+  "problem": "Queenie and Horst play a game on a 40 × 60 chessboard with some strange rules. In the beginning the board is empty. In every turn, Horst places a black knight on an empty square in such a way that his new knight does not attack any previous knights. The knight can jump in an L-shape, i.e., two squares in one direction and one square in a perpendicular direction. Then Queenie places a white queen on an empty square. The queen can move any number of squares in a straight line horizontally, vertically, or diagonally. The game gets finished when somebody cannot move. The players are also allowed to play randomly as long as the rules are followed. Find the maximal positive K such that, regardless of the strategy of Queenie, Horst can put at least K knights on the board.",
+  "answer": "600"
+ },
+ {
+  "idx": 43,
+  "problem": "A sports tournament is being organized for 256 players. Every pair of players must play exactly one match against each other. The tournament is scheduled such that each day only one match is played. Each player arrives on the day of their first match and departs on the day of their last match. For each day a player is present at the tournament, the organizers must pay 1 coin to the hotel. The organizers want to minimize the total cost of all players' stays by designing an optimal schedule. Additionally, there is a VIP lounge where special guests can watch the matches for free. The VIP lounge has limited capacity and can only accommodate a maximum of 10 people at any given time. However, the presence of the VIP lounge and the special guests does not affect the scheduling of the matches or the total cost of the players' stays. Determine the minimum total cost the organizers must pay for all players' hotel stays.",
+  "answer": "4202432"
+ },
+ {
+  "idx": 44,
+  "problem": "In a grand theater, there are 40000 seats arranged into 200 rows, each row has 200 seats to form a 200 × 200 seating arrangement. Out of these seats, some seats are reserved and others remain available. The theater organizers want to assign reserved seats following these two strict conditions: 1) No two reserved seats can be in rows that have the same number of reserved seats while also being in columns that have the same number of reserved seats. 2) There must be two rows that each contain exactly m reserved seats. What is the largest possible value of m for which such a seating assignment can be created?",
+  "answer": "96"
+ },
+ {
+  "idx": 45,
+  "problem": "There are 100 empty boxes B₁, …, B₁₀₀ in a row on a table and an unlimited supply of pebbles. Given a positive integer n, Alice and Bob play the following game. In the first round, Alice takes n pebbles and distributes them into the 100 boxes as she wishes. Each subsequent round consists of two steps: (a) Bob chooses an integer k with 1 ≤ k ≤ 99 and splits the boxes into the two groups B₁, …, Bₖ and Bₖ₊₁, …, B₁₀₀. (b) Alice picks one of these two groups, adds one pebble to each box in that group, and removes one pebble from each box in the other group. Bob wins if, at the end of any round, some box contains no pebbles. Find the smallest n such that Alice can prevent Bob from winning.",
+  "answer": "2600"
+ },
+ {
+  "idx": 46,
+  "problem": "In a crowded marketplace, 7396 stalls are arranged in a straight line, numbered from 1 to 7396. Each of two merchants, Ali and Baba, sells k distinct items numbered from 1 to k; each item is sold at a lower-numbered stall and bought at a higher-numbered stall. For each merchant, and for any i and j with 1 ≤ i<j ≤ k, the stall where item j is sold is higher than the stall where item i is sold; similarly, the stall where item j is bought is higher than the stall where item i is bought. Say that two stalls are connected by some merchant if one can start from the lower-numbered stall and reach the higher-numbered stall by buying and selling one or more items from that merchant. Determine the smallest k for which one can guarantee that there are two stalls that are connected by both merchants.",
+  "answer": "7311"
+ },
+ {
+  "idx": 47,
+  "problem": "The Lucas numbers L₀, L₁, L₂, … are defined inductively by L₀=2, L₁=1, and Lₙ₊₁=Lₙ+Lₙ₋₁ for n ≥ 1. The Fibonacci numbers F₀, F₁, F₂, … are defined inductively by F₀=0, F₁=1, and Fₙ₊₁=Fₙ+Fₙ₋₁ for n ≥ 1. Determine the smallest size of a set S of integers such that for every k=2,3, …, 125 there exist some x, y ∈ S such that x-y=Fₖ. Also, there exist some a, b ∈ T for some set T such that a-b = L₁₀₀.",
+  "answer": "64"
+ },
+ {
+  "idx": 48,
+  "problem": "Players A and B play a game on a blackboard that initially contains 1997 copies of the number 1. In every round, player A erases two numbers x and y from the blackboard, and then player B writes one of the numbers x+y and |x-y| on the blackboard. Additionally, there is a coin that is flipped before every round. If the coin lands heads, player B is forced to write x+y and if the coin lands tails player B is forced to write |x-y|. The game terminates as soon as, at the end of some round, one of the following holds: (1) one of the numbers on the blackboard is larger than the sum of all other numbers; (2) there are only zeros on the blackboard. Player B must then give as many cookies to player A as there are numbers on the blackboard. Player A wants to get as many cookies as possible, whereas player B wants to give as few as possible. Determine the number of cookies that A receives if both players play optimally.",
+  "answer": "8"
+ },
+ {
+  "idx": 49,
+  "problem": "Determine the largest N for which there exists a table T of integers with N rows and 16 columns that has the following properties: (i) Every row contains the numbers 1,2, …, 16 in some order. (ii) For any two distinct rows r and s, there is a column c such that |T(r, c)-T(s, c)| ≥ 2. In addition to the given constraints, every column in the table must contain distinct integers. Here T(r, c) means the number at the intersection of the row r and the column c.",
+  "answer": "81729648000"
+ },
+ {
+  "idx": 50,
+  "problem": "A ± 1-sequence is a sequence of 2022 numbers a₁, …, a₂₀₂₂, each equal to either +1 or -1. Additionally, there is a sequence of 3000 numbers b₁, …, b₃₀₀₀, each equal to either 0 or 2. Determine the largest C so that, for any ± 1-sequence, there exists an integer k and indices 1 ≤ t₁<…<tₖ ≤ 2022 so that tᵢ₊₁-tᵢ ≤ 2 for all i, and |Σᵢ₌₁ᵏ aₜᵢ| ≥ C",
+  "answer": "506"
+ },
+ {
+  "idx": 51,
+  "problem": "In each square of a garden shaped like a 2025 × 2025 board, there is initially a tree of height 0. A gardener and a lumberjack alternate turns playing the following game, with the gardener taking the first turn: - The gardener chooses a square in the garden. Each tree on that square and all the surrounding squares (of which there are at most eight) then becomes one unit taller. - The lumberjack then chooses four different squares on the board. Each tree of positive height on those squares then becomes one unit shorter. Additionally, there is a magic bird that flies around the garden and sings a beautiful song every time the lumberjack chooses a square. We say that a tree is majestic if its height is at least 10⁶. Determine the largest number K such that the gardener can ensure there are eventually K majestic trees on the board, no matter how the lumberjack plays.",
+  "answer": "2278125"
+ },
+ {
+  "idx": 52,
+  "problem": "Consider a game where you start with 2025 boxes, each containing a single marble. A move consists of selecting two boxes, removing an equal number of marbles from each, and creating a new box with the combined marbles. What is the minimum number of non-empty boxes that can be achieved through a finite sequence of such moves?",
+  "answer": "2"
+ },
+ {
+  "idx": 53,
+  "problem": "Minh is a student whose birthday is in the year 1997, so he starts by writing s integer-valued 1997-tuples on a blackboard. After doing that, he can take any two (not necessarily distinct) tuples {v}=(v₁, …, v₁₉₉₇) and {w}=(w₁, …, w₁₉₉₇) that he has already written, and apply one of the following operations to obtain a new tuple: & {v}+{w}=(v₁+w₁, …, v₁₉₉₇+w₁₉₉₇) & {v} {w}=(max (v₁, w₁), …, max (v₁₉₉₇, w₁₉₉₇)) and then write this tuple on the blackboard. It turns out that, in this way, Minh can write any integer-valued 2023-tuple on the blackboard after finitely many steps. What is the smallest possible number s of tuples that he initially wrote?",
+  "answer": "3"
+ },
+ {
+  "idx": 54,
+  "problem": "Evan fills the fields of an 78 × 78 board with numbers from 1 to 6084, each number being used exactly once. She then counts the total number of good paths on the board. A good path is a sequence of fields of arbitrary length (including 1) such that: (i) The first field in the sequence is one that is only adjacent to fields with larger numbers, and also one that has an even row number and an even column number. (ii) Each subsequent field in the sequence is adjacent to the previous field, (iii) The numbers written on the fields in the sequence are in increasing order. Two fields are considered adjacent if they share a common side. Find the smallest possible number of good paths Alice can obtain.",
+  "answer": "12013"
+ },
+ {
+  "idx": 55,
+  "problem": "Let ℤ≥₀ be the set of non-negative integers, and let f: ℤ≥₀ × ℤ≥₀ → ℤ≥₀ be a bijection such that whenever f(x₁, y₁)>f(x₂, y₂), we have f(x₁+1, y₁)>f(x₂+1, y₂) and f(x₁, y₁+1)>f(x₂, y₂+1). Also, let g: ℤ≥₀ → ℤ≥₀ be a function such that g(n) = n² - n + 1. Let N be the number of pairs of integers (x, y), with 0 ≤ x, y<100, such that f(x, y) is odd. Let the smallest and largest possible value of N be a,b, find the product ab.",
+  "answer": "18750000"
+ },
+ {
+  "idx": 56,
+  "problem": "A polyomino is a figure which consists of unit squares joined together by their sides. (A polyomino may contain holes.) Consider a grid of unit square cells which extends to infinity in all directions. Find the greatest positive integer C which satisfies the following condition: For every colouring of the cells of the grid in 36 colours, there is some polyomino within the grid which contains at most 35 colours and whose area is at least C.",
+  "answer": "2450"
+ },
+ {
+  "idx": 57,
+  "problem": "Let n,s, and t be positive integers and 0<λ<1. A simple graph on n vertices with at least λ n² edges is given. We say that (x₁,…,xₛ,y₁,…,yₜ) is a good intersection if letters xᵢ and yⱼ denote not necessarily distinct vertices and every xᵢyⱼ is an edge of the graph (1≤ i≤ s, 1≤ j≤ t). Find the minimum number of good insertions.",
+  "answer": "λˢᵗnˢ⁺ᵗ"
+ },
+ {
+  "idx": 58,
+  "problem": "Let s be positive integers such that s<5625. Initially, one cell out of an n × n grid is coloured green. On each turn, we pick some green cell c and colour green some s out of the 5625 cells in the 75 × 75 square centred at c. No cell may be coloured green twice. We say that s is sparse if there exists some positive number C such that, for every positive integer n, the total number of green cells after any number of turns is always going to be at most Cn. Find the least sparse integer s.",
+  "answer": "4181"
+ },
+ {
+  "idx": 59,
+  "problem": "In a circular seating arrangement at a party, there are 16 guests sitting at the table play a game. Each guest has a unique name tag crated by the game master, and then these name tags are randomly distributed among the guests. In each of the next n rounds, the guests plays the game according to the following rule: i) Any guest who has their own name tag exits the table. ii) The remaining guests pass their name tags to the guest sitting immediately to their right. We are interested in finding the number of ways the name tags can be distributed such that there exists at least one guest who does not leave the table after 4 rounds.",
+  "answer": "85383238549"
+ },
+ {
+  "idx": 60,
+  "problem": "Let Pₙ be a path on n vertices and let λ be a positive real number. Define ZPₙ(λ) = ΣI∈Sλ|I| where ℐ(Pₙ) is the set of independent set of Pₙ. Compute z₁₅ in terms of λ.",
+  "answer": "λ⁸ + 36λ⁷ + 210λ⁶ + 462λ⁵ + 495λ⁴ + 286λ³ + 91λ² + 15λ + 1"
+ },
+ {
+  "idx": 61,
+  "problem": "Grogg and Winnie are playing a game using a deck of 50 cards numbered 1 through 50. They take turns with Grogg going first. On each turn a player chooses a card from the deck—this choice is made deliberately, not at random—and then adds it to one of two piles (both piles are empty at the start of the game). After all 50 cards are in the two piles, the values of the cards in each pile are summed, and Winnie wins the positive difference of the sums of the two piles, in dollars. (For instance, if the first pile has cards summing to 510 and the second pile has cards summing to 765, then Winnie wins $255.) Winnie wants to win as much as possible, and Grogg wants Winnie to win as little as possible. If they both play with perfect strategy, find (with proof) the amount that Winnie wins.",
+  "answer": "75"
+ },
+ {
+  "idx": 62,
+  "problem": "Given right triangle XYZ with hypothenuse XZ and ∠ X = 50°. Points P and Q on the side YZ are such that ∠ PXZ = ∠ QXY = 10°. Compute the ratio 2 × YQ/ZP.",
+  "answer": "4"
+ },
+ {
+  "idx": 63,
+  "problem": "Given a convex n-sided polygon B₁… Bₙ. Let Qᵢ (i = 1,…, n) be points on the boundary of the polygon such that BᵢQᵢ divides the area of the polygon in half. Assume that none of the points Qᵢ coincide with any vertex of the polygon and that these points lie on k sides of the n-sided polygon. For a given value of n, determine the minimum possible value of k.",
+  "answer": "3"
+ },
+ {
+  "idx": 64,
+  "problem": "A convex m-gon Q, where m > 3, is divided into identical triangles by diagonals that do not intersect within it. For which values of m is it possible for Q to be circumscribed?",
+  "answer": "4"
+ },
+ {
+  "idx": 65,
+  "problem": "A line intersects a segment PQ at point R. What is the maximum number of points Y on this line such that one of the angles ∠ PYR and ∠ QYR is equal to half of the other?",
+  "answer": "4"
+ },
+ {
+  "idx": 66,
+  "problem": "For which largest value of n does there exist a convex polyhedron with n faces such that for each face there is a point outside the polyhedron from which the remaining n - 1 faces are visible?",
+  "answer": "4"
+ },
+ {
+  "idx": 67,
+  "problem": "Let k be a positive real number. Triangle XYZ is acute and scalene, O is its circumcenter and XD, YE, ZF are the internal bisectors. On the rays XD, YE, ZF, respectively, let points P, Q, R such that XP/(XD) = YQ/(YE) = ZR/(ZF) = k. Denote (C₁), (C₂), (C₃) be respectively the circle through P and touches OX at X, the circle through Q and touches OY at Y, the circle through R and touches OZ at Z. Find all values of k such that three circles (C₁), (C₂), (C₃) have exactly two common points.",
+  "answer": "1/2, 1"
+ },
+ {
+  "idx": 68,
+  "problem": "Let Γ be the circumcircle of right-angled triangle XYZ (∠ X = 90°). The tangent to Γ at point X intersects the line YZ at point T. Suppose that N is the midpoint of the minor arc XY, and TN intersects Γ for the second time in R. The tangent to Γ at point R intersects XZ at L. Compute ∠ TLC in terms of degree.",
+  "answer": "90"
+ },
+ {
+  "idx": 69,
+  "problem": "Let PQR be fixed obtuse triangle, and let M denote its orthocenter. Let αP denote the circle with center P and radius PM. Let αQ and αR be defined in a similar way. Let Y be a moving point outside of the circumcircle of triangle PQR, let circle (Y) be defined in the following way (if possible): take the polars of point Y with respect to circles αP, αQ, and αR, and let (Y) be the circumcircle of the triangle defined by these three lines. Find the locus of points Y such that point Y lies on circle (Y).",
+  "answer": "Y = M"
+ },
+ {
+  "idx": 70,
+  "problem": "Let PQRS be a convex quadrilateral with perimeter 3 and PR=QS=1. Determine the maximum possible area of PQRS.",
+  "answer": "5/8"
+ },
+ {
+  "idx": 71,
+  "problem": "A subset X of ℤ is called rich if for any positive integer n and n numbers x₀, x₁, …, xₙ belonging to X, all integer roots of x₀ + x₁ · x + … + xₙ · xⁿ = 0 belong to X. Find all rich sets that contain 2ᵏ - 2ˡ for any positive integers k and l.",
+  "answer": "Z"
+ },
+ {
+  "idx": 72,
+  "problem": "For a positive integer n ≥ 2, let the set Cₙ be the set of integers 2ⁿ - 2ⁱ for integers i such that 0 ≤ i < n. Find the smallest positive integer that cannot be expressed as a sum of numbers in Cₙ (where the same number can be used multiple times).",
+  "answer": "(n-2)2ⁿ +1"
+ },
+ {
+  "idx": 73,
+  "problem": "Find all pairs of positive integers (a,b) that satisfy the following condition: 3√(7a² +ab+b²)=a+1",
+  "answer": "(n² +3n+2, n³ + 4n² + 3n -1)"
+ },
+ {
+  "idx": 74,
+  "problem": "Find all functions g:ℚ→ ℤ that satisfy the following condition for any rational number x, integer a, and positive integer b: g(x)=g((g(bx-a)+a)/b)",
+  "answer": "g(x)=c, g(x)=⌈ x ⌉, g(x)=⌊ x ⌋"
+ },
+ {
+  "idx": 75,
+  "problem": "For a positive integer n, we call g:ℤ→ ℤ a {n-good function} if g(1)=1 and for any two distinct integers a and b, g(a)-g(b) divides aⁿ -bⁿ. We call a positive integer n an exotic integer if the number of n-good functions is twice of an odd integer. Find 132th exotic integer.",
+  "answer": "69169"
+ },
+ {
+  "idx": 76,
+  "problem": "For a given positive integer n, let m be the exponent of 2 in the prime factorization of n. Define f(n) = n/(2ᵐ). Find all positive integers u for which there exists a positive integer v such that (Condition) f(u+v) - f(u), f(u+v+1) - f(u+1), …, f(u+2v-1) - f(u+v-1) are all multiples of 4.",
+  "answer": "1,3,5"
+ },
+ {
+  "idx": 77,
+  "problem": "Let k>l be given coprime positive integers greater than 1. Define a function f: ℤ→ ℤ as follows: for x, f(x) is the smallest value of |a|+|b| among all integers a,b satisfying ka+lb = x. An integer x is called 'nice' if f(x)≥ max (f(x-a),f(x+a),f(x-b),f(x+b)). Denote by F(k,l) the the number of nice integers when both k and l are odd, and denote by G(k,l) the number of nice integers when either k or l is even. Suppose that there exists polynomials p(k,l) and q(k,l) such that F(k,l)=p(k,l) for all odd integers k,l and G(k,l)=q(k,l) whenever at least one of k or l is even. Evaluate p(k,l)² + q(k,l)².",
+  "answer": "5(l-1)²"
+ },
+ {
+  "idx": 78,
+  "problem": "For the integer sequence (aₙ) defined by a₁=10 and aₙ₊₁=6aₙ - 2ⁿ⁺² - 3ⁿ⁺¹ +5, find all positive numbers that are relatively prime to every number in (aₙ).",
+  "answer": "1"
+ },
+ {
+  "idx": 79,
+  "problem": "Find all pairs (a, b) of positive real numbers such that for every prime number p and real number x satisfying 2²ᵖ⁺¹ˣ = 2ᵖx + 1, we have (aˣ + bˣ + 1)/3 ≥ x + 1.",
+  "answer": "(a,b):ab ≥ e³"
+ },
+ {
+  "idx": 80,
+  "problem": "A positive integer m consisting of distinct digits is considered \"good\" if it is a single-digit number, or if removing one of its digits results in a divisor of m that is also a good number. Find the largest good number.",
+  "answer": "146250"
+ },
+ {
+  "idx": 81,
+  "problem": "Find all even integers d such that the number of ordered integer pairs (x, y) satisfying (x + 2y - d)² = xy is even.",
+  "answer": "all multiples of 14, excluding 0"
+ },
+ {
+  "idx": 82,
+  "problem": "Let p be a prime greater than 100. Find the 9th largest positive integer n less than p such that nk + k ≥ p ⌊ (nk + n)/p ⌋ for all k = 0, 1, …, p - 2.",
+  "answer": "⌊⌋"
+ },
+ {
+  "idx": 83,
+  "problem": "Positive integers M and N satisfy the following conditions: (1) M is a 1000-digit number, and none of its digits are 0. (2) The decimal expansion of ⌊ M/N ⌋ contains the digit 0 exactly A times. (The leading digit of the decimal expansion is not 0.) Find the maximum possible value of A.",
+  "answer": "939"
+ },
+ {
+  "idx": 84,
+  "problem": "Let S(n) be the sum of the digits in the decimal representation of a positive integer n. Find the smallest positive integer n such that S(n)S(n+1)… S(n+37) is not a multiple of 11.",
+  "answer": "999981"
+ },
+ {
+  "idx": 85,
+  "problem": "Let a be a positive integer greater than or equal to 3. A finite set X of positive integers is said to be 'clustered' if for any three elements x, y, z chosen from X, at least one of gcd(x,y), gcd(y,z), or gcd(z,x) is not equal to 1. Find the maximum possible value of |X| for a clustered set X ⊂ ℕ where the difference between the maximum and minimum elements of X are less than or equal to a.",
+  "answer": "⌋+⌊⌋-⌊⌋"
+ },
+ {
+  "idx": 86,
+  "problem": "x⁴+5∈Q[x]在Q上的分裂域(记为E)是( ). [E:Q]=( ). E/Q( )(填“是”或“否”.)为Galois扩张.",
+  "answer": "Q(,ζ₈),16,是"
+ },
+ {
+  "idx": 87,
+  "problem": "设D₈是正方形上的二面体群，下列正确的是： - [A.] D₈中存在8阶元. - [B.] D₈的四阶子群一定是Abel群. - [C.] C(D₈)={1}. - [D.] [D₈,D₈]是2阶群.",
+  "answer": "B, D"
+ },
+ {
+  "idx": 88,
+  "problem": "关于函数f在区间[a, b]上的勒贝格可积性，下列哪些陈述是正确的？A. 如果∈tₐᵇ |f(x)| dx < ∞，则函数f在[a, b]上勒贝格可积。 B. 如果函数f在[a, b]上连续，则它在[a, b]上勒贝格可积。 C. 如果函数f在[a, b]上的不连续点集测度为零，则它在[a, b]上勒贝格可积。 D. 如果函数f在[a, b]上有界，则它在[a, b]上勒贝格可积。",
+  "answer": "AB"
+ },
+ {
+  "idx": 89,
+  "problem": "六、(10 分) 某城市有10000 名市民与两个剧院, 每个剧院有 x 个座位, 每个市民独立等可能地选取一个剧院看戏. 若希望“某个市民来到剧院后因为没有座位不得不放弃看戏”的概率不超过0.01, 计算 x 的最小值. (参考数据: Φ(2.05)=0.98, Φ(2.17)=0.985, Φ(2.33)=0.99,Φ(2.58)=0.995, Φ 是标准正态函数.)",
+  "answer": "5129"
+ },
+ {
+  "idx": 90,
+  "problem": "假设 (Xₙ)ₙ≥₀ 是 N 个顶点的完全图上的简单随机游动.令T为首次遍访所有顶点的时间，即 T=maxᵢ∈{₁,…,N}σᵢ (其中 σᵢ=min{t≥1:Xₜ=i})求ET.",
+  "answer": "(N-1)"
+ },
+ {
+  "idx": 91,
+  "problem": "(a)计算函数 f(x)=e⁻|ˣ⁺¹|+1/(4+x²) Fourier 变换后的结果;",
+  "answer": "f̂(ξ)="
+ },
+ {
+  "idx": 92,
+  "problem": "计算函数 f(x, y) = x² + y² 在圆周 x² + y² = 1 上的拉普拉斯算子（Laplacian）在点 (1/2, √(3)/2) 处的值。",
+  "answer": "在点(，)处（对应 θ = π/3），圆周上的拉普拉斯值为0"
+ },
+ {
+  "idx": 93,
+  "problem": "下列关于实数集上紧集的描述，正确的是：A. 实数集R的子集是紧集当且仅当它是闭集。 B. 实数集R的子集是紧集当且仅当它是开集。 C. 实数集R的子集是紧集当且仅当它是闭集且有界。 D. 实数集R的子集是紧集当且仅当它是开集且有界。 E. 实数集R的子集是紧集当且仅当它的每个开覆盖都有有限子覆盖。",
+  "answer": "CE"
+ },
+ {
+  "idx": 94,
+  "problem": "设(aₙ)是一个数列。如果对于任意的ε > 0，存在一个正整数N，使得对所有m, n ≥ N，都有|aₙ - aₘ| < ε，则称(aₙ)是Cauchy数列。在完备度量空间中，下列关于Cauchy收敛准则的陈述正确的是：A. 每个有界数列都是Cauchy数列。 B. 每个收敛数列都是Cauchy数列。 C. 每个Cauchy数列都是有界的。 D. 每个Cauchy数列在完备度量空间中都收敛。",
+  "answer": "BCD"
+ },
+ {
+  "idx": 95,
+  "problem": "Consider the message aabababcabcde. Describe the decomposition into phrases that will be used by Lempel-Ziv, and give the encoded string obtained using Lempel-Ziv. When encoding a letter, use the mapping a→000, b→001, c→010, d→011, e→100.",
+  "answer": "Lempel–Ziv 短语分解为"
+ },
+ {
+  "idx": 96,
+  "problem": "关于线性规划的对偶问题，下列说法正确的是：A. 原问题的目标函数在对偶问题中变为约束条件。 B. 如果原问题是求最小值问题，对偶问题也必定是求最小值问题。 C. 原问题约束条件的系数在对偶问题中变为目标函数的系数。 D. 对偶问题的对偶问题会返回原问题。 E. 原问题的可行域与对偶问题的约束条件互为对应。",
+  "answer": "D"
+ },
+ {
+  "idx": 97,
+  "problem": "(10 分) 设 Ω 为开区域. 算子 Lu:= Σᵢ,ⱼ₌₁ⁿ ∂ᵢ (aᵢⱼ ∂ⱼ u) + Σⱼ₌₁ⁿ bⱼ ∂ⱼ u + cu, 定义域为 C₀∞(Ω). 其中 aᵢⱼ, bⱼ, c 为实有界光滑函数. 求 L 在 L²(Ω) 上的伴随算子 L*.",
+  "answer": "L*u = Σᵢ,ⱼ ∂ᵢ(aᵢⱼ ∂ⱼ u) − Σⱼ ∂ⱼ(bⱼ u) + c u"
+ },
+ {
+  "idx": 98,
+  "problem": "矩阵A 的条件数定义是: A. κ(A)=√(|A|₁·|A⁻¹|₁) B. κ(A)=|A|₁·|A⁻¹|₁ C. κ(A)=√(|A|₂·|A⁻¹|₂) D. κ(A)=|A|₂·|A⁻¹|₂",
+  "answer": "B"
+ },
+ {
+  "idx": 99,
+  "problem": "对于偏微分方程 D e l t a u = f 在区域 Ω 上,边界条件为 u=g o n ∂ Ω,使用( )方法进行离散化处理,可以有效逼近解。",
+  "answer": "有限差分法、有限元法（或有限体积法）"
+ },
+ {
+  "idx": 100,
+  "problem": "使用中心差分公式计算函数 f(x)=sin(x) 在 x=π/4 处的一阶导数,取 h=0.1。",
+  "answer": "函数f(x)=sin(x)在x=π/4处的一阶导数（中心差分，h=0.1）约为0.6706（保留四位小数）"
+ },
+ {
+  "idx": 101,
+  "problem": "判断：两个总量指标时间数列相比照得到的时间数列一定是相对数时间数列。（",
+  "answer": "正确"
+ },
+ {
+  "idx": 102,
+  "problem": "正态分布的两个参数分别是（） A.均值和方差B.均值和标准差C.中位数和方差D.中位数和标准差",
+  "answer": "B"
+ },
+ {
+  "idx": 103,
+  "problem": "时间序列的构成要素有（）。 A.长期趋势B.季节变动C.循环变动D.不规则变动E.随机变动",
+  "answer": "A,B,C,D,E"
+ },
+ {
+  "idx": 104,
+  "problem": "对于时间序列的季节调整，常用的方法有( )、( )",
+  "answer": "移动平均法、时间序列分解法"
+ },
+ {
+  "idx": 105,
+  "problem": "在统计学中，用来表示数据分散程度的一个指标是",
+  "answer": "标准差"
+ },
+ {
+  "idx": 106,
+  "problem": "对于一个大型数据集，为了快速了解数据的基本特征，以下哪种统计图形最为合适？（） A. 直方图B. 散点图C. 箱线图D. 折线图",
+  "answer": "A"
+ },
+ {
+  "idx": 107,
+  "problem": "在研究某种疾病的发病率与环境因素的关系时，由于无法确定环境因素对发病率的具体函数形式，应采用哪种回归方法？（） A. 线性回归B. 非线性回归C. 逻辑回归D. 以上都不对",
+  "answer": "D"
+ },
+ {
+  "idx": 108,
+  "problem": "异方差性会导致参数估计量的方差（ ）",
+  "answer": "异方差性不会导致参数估计量的偏误，但会使传统方差估计失效，即低估或高估真实方差，导致OLS估计量不再是有效估计。"
+ },
+ {
+  "idx": 109,
+  "problem": "在逐步回归法中，若新引入的变量使得（），则该变量应被剔除。 A.某个旧变量的t检验不显著 B.调整的判定系数减小 C.F检验不显著 D.以上都有可能",
+  "answer": "D"
+ },
+ {
+  "idx": 110,
+  "problem": "非线性回归模型的参数估计通常采用（）方法。 A.最小二乘法 B.极大似然法 C.牛顿－拉夫森法 D.以上都可以",
+  "answer": "A"
+ },
+ {
+  "idx": 111,
+  "problem": "判断：异方差性会导致普通最小二乘估计量的方差增大。（）",
+  "answer": "错误"
+ }
+]

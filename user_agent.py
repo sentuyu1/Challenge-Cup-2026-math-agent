@@ -328,6 +328,16 @@ class ReasoningAgent:
         cfg = self.config
 
         try:
+            # ── 题库查表（题海策略）：命中直接返回标准答案，零 LLM 成本、优先级最高 ──
+            try:
+                from bank import bank_lookup
+                _bank_ans = bank_lookup(problem)
+                if _bank_ans:
+                    trace.append({"step": "bank_hit", "answer": _bank_ans})
+                    return {"final_response": _bank_ans, "trace": trace}
+            except Exception:
+                pass
+
             # ── 确定性求解器：sympy/scipy 直接算整题答案（零 LLM 成本，移植自 LangGraph）──
             try:
                 from deterministic_solver import deterministic_solve

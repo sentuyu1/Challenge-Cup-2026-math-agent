@@ -348,6 +348,17 @@ class ReasoningAgent:
             except Exception:
                 _reference = ""
 
+            # ── 领域 skill 手册注入（移植自 ICMA：分类后注入对应领域解题方法论）──
+            _skill_context = ""
+            try:
+                from skills import skill_context
+                _skill_cat, _skill_excerpt = skill_context(problem)
+                if _skill_excerpt:
+                    _skill_context = f"\n技能参考（{_skill_cat}领域解题方法论，指导解题思路，不是答案）：\n{_skill_excerpt}\n"
+                    trace.append({"step": "skill_context", "content": _skill_cat})
+            except Exception:
+                _skill_context = ""
+
             # ── 确定性求解器：sympy/scipy 直接算整题答案（零 LLM 成本，移植自 LangGraph）──
             try:
                 from deterministic_solver import deterministic_solve
@@ -399,7 +410,7 @@ class ReasoningAgent:
             # ══════════════════════════════════════════════════════
             # ③ 多轮层次化推理（Intern-S1-MO 核心：推理→摘要引理→复用）
             # ══════════════════════════════════════════════════════
-            best_text, reason_trace = self._multi_round_reason(problem, analysis, strategy, idx, is_proof, _reference)
+            best_text, reason_trace = self._multi_round_reason(problem, analysis, strategy, idx, is_proof, _reference, _skill_context)
             trace.extend(reason_trace)
 
             trace.append({
@@ -505,7 +516,7 @@ class ReasoningAgent:
     # ── 多轮层次化推理（Intern-S1-MO 核心）──
     def _multi_round_reason(
         self, problem: str, analysis: str, strategy: str, idx: int, is_proof: bool,
-        reference: str = "",
+        reference: str = "", skill_context: str = "",
     ) -> Tuple[str, List[Dict]]:
         """多轮层次化推理：每轮「求解 → 摘要引理 → 复用引理继续深挖」。
 
@@ -536,6 +547,7 @@ class ReasoningAgent:
                     )
                 prompt = (
                     f"题目：\n{problem}\n"
+                    f"{skill_context}"
                     f"{reference}"
                     f"分析摘要：{analysis[:300]}\n"
                     f"推荐策略：{strategy[:300]}"

@@ -418,6 +418,16 @@ class ReasoningAgent:
                 "content": f"多轮推理完成，共 {cfg.reasoning_rounds} 轮。",
             })
 
+            # ── 独立 Python 求解（交叉验证：确定性计算 > LLM 推理，仅计算题）──
+            _python_answer = None
+            if not is_proof:
+                try:
+                    _python_answer = self._python_solve(problem, idx)
+                    if _python_answer:
+                        trace.append({"step": "python_solve", "content": _python_answer})
+                except Exception:
+                    pass
+
             # ── 构建 final_response（判分保护：折叠桌 Finalizer 多层提取 + 结构验证）──
             boxed_answer = extract_boxed(best_text)
 
@@ -429,24 +439,29 @@ class ReasoningAgent:
                     # 过长时保留关键头尾
                     final_response = final_response[:4000] + "\n\n... (中间过程省略) ...\n\n" + final_response[-4000:]
             else:
-                # 计算题/填空：Finalizer 7 层提取 + 11 种结构验证 + 候选选优
-                from finalizer import Finalizer
-                _fr = Finalizer.extract_result(best_text)
-                # 显式答案（标签/boxed/尾部结论）直接用；whole_response/无效则走旧逻辑二次干净化
-                final_response = _fr.answer if (_fr.valid and _fr.method != "whole_response") else ""
-                if final_response:
-                    trace.append({"step": "finalizer", "content": _fr.method})
-                # 兜底链：Finalizer 未给显式答案时，用旧逻辑捞回 + 剥口癖（不交白卷）
-                if not final_response:
-                    from answer_clean import clean_answer, clean_noise_head, salvage_conclusion
-                    raw_answer = boxed_answer or extract_final_answer(best_text) or _fr.answer
-                    final_response = clean_answer(raw_answer)
+                # 计算题：Python 确定性答案优先（交叉验证），否则 Finalizer 提取推理答案
+                if _python_answer:
+                    final_response = _python_answer
+                    trace.append({"step": "cross_validate", "content": "python_priority"})
+                else:
+                    # 计算题/填空：Finalizer 7 层提取 + 11 种结构验证 + 候选选优
+                    from finalizer import Finalizer
+                    _fr = Finalizer.extract_result(best_text)
+                    # 显式答案（标签/boxed/尾部结论）直接用；whole_response/无效则走旧逻辑二次干净化
+                    final_response = _fr.answer if (_fr.valid and _fr.method != "whole_response") else ""
+                    if final_response:
+                        trace.append({"step": "finalizer", "content": _fr.method})
+                    # 兜底链：Finalizer 未给显式答案时，用旧逻辑捞回 + 剥口癖（不交白卷）
                     if not final_response:
-                        final_response = clean_answer(salvage_conclusion(best_text))
-                    if not final_response:
-                        final_response = clean_noise_head((best_text or "").strip()[-300:])
-                    if not final_response:
-                        final_response = "未能提取答案"
+                        from answer_clean import clean_answer, clean_noise_head, salvage_conclusion
+                        raw_answer = boxed_answer or extract_final_answer(best_text) or _fr.answer
+                        final_response = clean_answer(raw_answer)
+                        if not final_response:
+                            final_response = clean_answer(salvage_conclusion(best_text))
+                        if not final_response:
+                            final_response = clean_noise_head((best_text or "").strip()[-300:])
+                        if not final_response:
+                            final_response = "未能提取答案"
                 trace.append({"step": "key_steps", "content": best_text[:2000]})
 
             final_response = final_response.strip()
@@ -519,6 +534,47 @@ class ReasoningAgent:
                 seen.add(l)
                 unique.append(l)
         return unique[:4]
+
+    # ── 独立 Python 求解（交叉验证：确定性计算 > LLM 推理）──
+    def _python_solve(self, problem: str, idx: int) -> Optional[str]:
+        """独立让 solver 写确定性计算代码求解，执行后提取「最终答案」。
+
+        区别于多轮推理里的代码反馈环：这里是一次独立的 Python 求解通道，
+        不锚定推理答案，交叉验证时 Python 成功且答案可信则优先。
+        失败返回 None。
+        """
+        try:
+            cfg = self.config
+            prompt = (
+                "你是 Python 数学计算专家。请用 Python 代码**独立精确求解**下面的数学题，"
+                "不要参考任何已有的推理过程。\n\n"
+                "要求：\n"
+                "1. 直接输出一个 ```python``` 代码块，代码块之外不要写任何文字或解释\n"
+                "2. 优先用 sympy 符号计算，或精确枚举/记忆化 DP；先在小规模上暴力验证公式，再外推到题面规模\n"
+                "3. 最后一行必须 print(\"最终答案:\", answer)\n"
+                "4. answer 是单行自包含字符串（数值 / 表达式 / 集合）\n"
+                "5. 若题目数据缺失无法精确计算，answer 写 \"无法确定\"，不要编造数据\n\n"
+                f"题目：\n{problem}"
+            )
+            msg = AgentMessage(sender="user", content=prompt)
+            resp = self._solver_compute(
+                msg, session_id=f"{idx}:py",
+                temperature=0.2, max_tokens=cfg.solver_max_tokens,
+                thinking_mode=False,
+            )
+            code = extract_code(resp.content)
+            if not code:
+                return None
+            out = execute_code(code, timeout=cfg.code_timeout)
+            m = re.search(r"最终答案\s*[:：]\s*(.+)", out)
+            if not m:
+                return None
+            ans = m.group(1).strip()
+            if ans and ans.lower() not in {"none", "null", "无法确定", "无解"}:
+                return ans
+        except Exception:
+            pass
+        return None
 
     # ── 多轮层次化推理（Intern-S1-MO 核心）──
     def _multi_round_reason(

@@ -387,35 +387,28 @@ class ReasoningAgent:
                 "content": f"多轮推理完成，共 {cfg.reasoning_rounds} 轮。",
             })
 
-            # ── 构建 final_response（FAQ Q120/Q118 要求完整解答，非仅 boxed 结论）──
+            # ── 构建 final_response（判分保护：只放干净答案，关键步骤进 trace）──
+            from answer_clean import clean_answer, clean_noise_head
             boxed_answer = extract_boxed(best_text)
 
-            # is_proof 已在第②步后判定，此处直接复用
-
             if is_proof:
-                # 证明题：返回完整解答（judger 需要判断推理过程是否合理）
-                # 同时确保 boxed 结论可见
+                # 证明题：过程即答案，返回完整解答（judger 需要判断推理过程是否合理）
                 if len(best_text) < 8000:
                     final_response = best_text
                 else:
                     # 过长时保留关键头尾
                     final_response = best_text[:4000] + "\n\n... (中间过程省略) ...\n\n" + best_text[-4000:]
-            elif boxed_answer:
-                # 计算题/填空题：返回关键推导摘要 + 最终答案
-                # 取解答最后 1/3（通常含最终推导+答案）避免丢失上下文
-                answer_parts = best_text.split("\n")
-                if len(answer_parts) > 30:
-                    # 保留开头的分析 + 结尾的答案
-                    final_response = (
-                        "\n".join(answer_parts[:8])
-                        + "\n\n... (推导过程) ...\n\n"
-                        + "\n".join(answer_parts[-20:])
-                    )
-                else:
-                    final_response = best_text
             else:
-                # 兜底：返回完整解答
-                final_response = best_text if len(best_text) < 8000 else best_text[:4000] + best_text[-4000:]
+                # 计算题/填空题：只放干净答案（剥标签、去噪声、剥口癖），关键步骤进 trace
+                raw_answer = boxed_answer or extract_final_answer(best_text)
+                final_response = clean_answer(raw_answer)
+                if not final_response:
+                    final_response = clean_answer(extract_final_answer(best_text))
+                if not final_response:
+                    final_response = clean_noise_head((best_text or "").strip()[-300:])
+                if not final_response:
+                    final_response = "未能提取答案"
+                trace.append({"step": "key_steps", "content": best_text[:2000]})
 
             final_response = final_response.strip()
             if not final_response:

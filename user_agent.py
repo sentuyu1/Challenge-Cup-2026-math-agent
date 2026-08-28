@@ -388,7 +388,7 @@ class ReasoningAgent:
             })
 
             # ── 构建 final_response（判分保护：只放干净答案，关键步骤进 trace）──
-            from answer_clean import clean_answer, clean_noise_head
+            from answer_clean import clean_answer, clean_noise_head, salvage_conclusion
             boxed_answer = extract_boxed(best_text)
 
             if is_proof:
@@ -402,8 +402,9 @@ class ReasoningAgent:
                 # 计算题/填空题：只放干净答案（剥标签、去噪声、剥口癖），关键步骤进 trace
                 raw_answer = boxed_answer or extract_final_answer(best_text)
                 final_response = clean_answer(raw_answer)
+                # 部分结论兜底：从推导尾部捞回「所以 xxx」的结论（不交白卷）
                 if not final_response:
-                    final_response = clean_answer(extract_final_answer(best_text))
+                    final_response = clean_answer(salvage_conclusion(best_text))
                 if not final_response:
                     final_response = clean_noise_head((best_text or "").strip()[-300:])
                 if not final_response:

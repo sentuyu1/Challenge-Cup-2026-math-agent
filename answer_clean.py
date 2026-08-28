@@ -98,3 +98,48 @@ def clean_answer(text: str) -> str:
     if m and re.search(r"(?:数量|个数|数目|秒|种|组|个|值为|等于)", t):
         return m.group(1)
     return t
+
+
+# 结论标记（「所以/因此/故/综上/答案」等，中英文）
+_CONCLUSION_RE = re.compile(
+    r"(?i)(?:所以|因此|故|综上|最终答案|答案为|答案为|answer\s+is|thus|therefore|hence)"
+    r"\s*[:：]?\s*(.+?)(?:\n|$)"
+)
+
+
+def salvage_conclusion(text: str) -> str:
+    """从解题文本捞回结论（「所以 xxx」「Therefore xxx」后面的内容）。
+
+    纯规则，零 LLM：当模型没给出 boxed 答案时，从推导尾部捞回结论作为兜底。
+    """
+    if not text:
+        return ""
+    for m in _CONCLUSION_RE.finditer(text):
+        candidate = m.group(1).strip()
+        # 结论行要「短且含实质内容」，跳过纯推导/占位
+        if candidate and len(candidate) <= 200 and not is_placeholder_answer(candidate):
+            return candidate
+    return ""
+
+
+# 噪声/探索散文的开头（模型在思考时输出的引导句，不是答案）
+_NOISE_HEAD_RE = re.compile(
+    r"(?i)^\s*(?:we\s+need|let(?:'s|\s+us)|note\s+that|first|consider|observe|"
+    r"suppose|assume|wait|hmm|actually|not\s+yet|what\s+if|i\s+think)"
+)
+
+
+def is_noise_answer(text: str) -> bool:
+    """检测噪声答案（探索散文、思维流尾巴、口癖、推导现场碎片）。"""
+    t = (text or "").strip()
+    if not t:
+        return True
+    if _NOISE_HEAD_RE.match(t):
+        return True
+    # 思维流尾巴：含疑问 + 犹豫词（"3/4. Do we have 5/6 or 3/4? Not yet"）
+    if re.search(r"(?i)[?？]\s*(?:not\s+yet|actually|or|but|hmm|wait)", t):
+        return True
+    # 纯 LaTeX 残片（未闭合 / 命令残片）
+    if t.count("$") % 2 == 1 or re.search(r"\\[a-zA-Z]+\s*$", t):
+        return True
+    return False

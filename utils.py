@@ -138,12 +138,22 @@ def extract_boxed(text: str) -> str:
 def extract_final_answer(text: str) -> str:
     """综合提取最终答案（多层兜底策略）。
 
-    1. \\boxed{...}
-    2. 最后非空行中查找"答案"相关标记
-    3. 最后非空行前 500 字符
+    1. 深度思考标签后（</think> 或 Thinking Process 之后的答案部分）
+    2. \\boxed{...}
+    3. "答案"相关标记
+    4. 最后非空行
     """
+    t = text or ""
+    # 深度思考：模型开 CoT 时输出 <think>...</think>答案 或 "Thinking Process:...答案"，
+    # 答案在思考过程之后，先剥离思考部分避免把思考内容当答案。
+    if "</think>" in t:
+        t = t.split("</think>")[-1]
+    elif re.search(r"(?im)^\s*thinking process\s*[:：]", t):
+        # "Thinking Process:" 开头，答案通常在最后的「最终答案/所以/Therefore」之后
+        pass
+
     # 优先 \\boxed
-    ans = extract_boxed(text)
+    ans = extract_boxed(t)
     if ans:
         return ans
 
@@ -151,16 +161,17 @@ def extract_final_answer(text: str) -> str:
     patterns = [
         r'(?:最终答案|答案为?|answer\s*[:：]?)\s*(.+?)(?:\n|$)',
         r'(?:所以|因此|故)\s*(.+?)(?:\n|$)',
+        r'(?i)(?:therefore|hence|thus)\s*[:：]?\s*(.+?)(?:\n|$)',
     ]
     for pat in patterns:
-        m = re.search(pat, text, re.IGNORECASE)
+        m = re.search(pat, t, re.IGNORECASE)
         if m:
             result = m.group(1).strip()
             if len(result) < 500:
                 return result
 
     # 兜底：最后非空行
-    lines = [l.strip() for l in text.split("\n") if l.strip()]
+    lines = [l.strip() for l in t.split("\n") if l.strip()]
     return lines[-1][:500] if lines else ""
 
 

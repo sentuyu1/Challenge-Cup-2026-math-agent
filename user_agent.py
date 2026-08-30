@@ -350,14 +350,15 @@ class ReasoningAgent:
 
             # ── 领域 skill 手册注入（移植自 ICMA：分类后注入对应领域解题方法论）──
             _skill_context = ""
-            try:
-                from skills import skill_context
-                _skill_cat, _skill_excerpt = skill_context(problem)
-                if _skill_excerpt:
-                    _skill_context = f"\n技能参考（{_skill_cat}领域解题方法论，指导解题思路，不是答案）：\n{_skill_excerpt}\n"
-                    trace.append({"step": "skill_context", "content": _skill_cat})
-            except Exception:
-                _skill_context = ""
+            if os.environ.get("MATH_AGENT_SKILL", "0") == "1":
+                try:
+                    from skills import skill_context
+                    _skill_cat, _skill_excerpt = skill_context(problem)
+                    if _skill_excerpt:
+                        _skill_context = f"\n技能参考（{_skill_cat}领域解题方法论，指导解题思路，不是答案）：\n{_skill_excerpt}\n"
+                        trace.append({"step": "skill_context", "content": _skill_cat})
+                except Exception:
+                    _skill_context = ""
 
             # ── 确定性求解器：sympy/scipy 直接算整题答案（零 LLM 成本，移植自 LangGraph）──
             try:
@@ -420,7 +421,7 @@ class ReasoningAgent:
 
             # ── 独立 Python 求解（交叉验证：确定性计算 > LLM 推理，仅计算题）──
             _python_answer = None
-            if not is_proof:
+            if os.environ.get("MATH_AGENT_PYTHON", "0") == "1" and not is_proof:
                 try:
                     _python_answer = self._python_solve(problem, idx)
                     if _python_answer:
@@ -431,19 +432,27 @@ class ReasoningAgent:
             # ── 构建 final_response（判分保护：折叠桌 Finalizer 多层提取 + 结构验证）──
             boxed_answer = extract_boxed(best_text)
 
+            _use_finalizer = os.environ.get("MATH_AGENT_FINALIZER", "0") == "1"
+
             if is_proof:
-                # 证明题：过程即答案，只做展示级清理（去代码围栏/LaTeX 归一化/去引号）
-                from finalizer import Finalizer
-                final_response = Finalizer.extract_solution(best_text)
-                if len(final_response) >= 8000:
-                    # 过长时保留关键头尾
-                    final_response = final_response[:4000] + "\n\n... (中间过程省略) ...\n\n" + final_response[-4000:]
+                if _use_finalizer:
+                    # 证明题：过程即答案，只做展示级清理（去代码围栏/LaTeX 归一化/去引号）
+                    from finalizer import Finalizer
+                    final_response = Finalizer.extract_solution(best_text)
+                    if len(final_response) >= 8000:
+                        # 过长时保留关键头尾
+                        final_response = final_response[:4000] + "\n\n... (中间过程省略) ...\n\n" + final_response[-4000:]
+                else:
+                    if len(best_text) < 8000:
+                        final_response = best_text
+                    else:
+                        final_response = best_text[:4000] + "\n\n... (中间过程省略) ...\n\n" + best_text[-4000:]
             else:
                 # 计算题：Python 确定性答案优先（交叉验证），否则 Finalizer 提取推理答案
                 if _python_answer:
                     final_response = _python_answer
                     trace.append({"step": "cross_validate", "content": "python_priority"})
-                else:
+                elif _use_finalizer:
                     # 计算题/填空：Finalizer 7 层提取 + 11 种结构验证 + 候选选优
                     from finalizer import Finalizer
                     _fr = Finalizer.extract_result(best_text)
@@ -462,6 +471,17 @@ class ReasoningAgent:
                             final_response = clean_noise_head((best_text or "").strip()[-300:])
                         if not final_response:
                             final_response = "未能提取答案"
+                else:
+                    # 旧 answer_clean 链（b7beeba 之前）
+                    from answer_clean import clean_answer, clean_noise_head, salvage_conclusion
+                    raw_answer = boxed_answer or extract_final_answer(best_text)
+                    final_response = clean_answer(raw_answer)
+                    if not final_response:
+                        final_response = clean_answer(salvage_conclusion(best_text))
+                    if not final_response:
+                        final_response = clean_noise_head((best_text or "").strip()[-300:])
+                    if not final_response:
+                        final_response = "未能提取答案"
                 trace.append({"step": "key_steps", "content": best_text[:2000]})
 
             final_response = final_response.strip()

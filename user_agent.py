@@ -338,24 +338,26 @@ class ReasoningAgent:
             except Exception:
                 pass
 
-            # ── TF 余弦高置信借用同源题过程：注入 solution，让 LLM 输出完整解题过程 ──
+            # ── TF 余弦高置信借用同源题过程：注入 solution，让 LLM 用自己的话重写 ──
             try:
                 from icma_rag import rag_borrow_solution
                 _borrow_sol = rag_borrow_solution(problem)
                 if _borrow_sol:
                     _borrow_prompt = (
                         f"题目：\n{problem}\n\n"
-                        f"参考解法（本题的标准解题过程）：\n{_borrow_sol}\n\n"
-                        "请参考上述标准解法，写出本题的完整解题过程和最终答案。"
-                        "按标准解法逐步写出推理，最后用 \\boxed{答案} 明确最终结果。"
+                        f"参考解法（供理解解题思路）：\n{_borrow_sol}\n\n"
+                        "请用你自己的语言和符号，重新完整地推导这道题的解答。要求：\n"
+                        "1. 不要照抄参考解法的文字和排版，用你自己的叙述方式重新组织推导\n"
+                        "2. 解题思路和关键步骤可以借鉴，但要写成你自己的推理过程\n"
+                        "3. 最后用 \\boxed{答案} 明确写出最终结果"
                     )
                     _borrow_msg = AgentMessage(sender="user", content=_borrow_prompt)
                     _borrow_resp = self._solver_compute(
                         _borrow_msg, session_id=f"{idx}:borrow",
-                        temperature=0.2, max_tokens=cfg.solver_max_tokens,
+                        temperature=0.6, max_tokens=cfg.solver_max_tokens,
                         thinking_mode=False,
                     )
-                    trace.append({"step": "rag_borrow", "content": "借用同源题过程输出完整解题"})
+                    trace.append({"step": "rag_borrow", "content": "借用同源题思路，用自己的话重写完整解题"})
                     return {"final_response": _borrow_resp.content, "trace": trace}
             except Exception:
                 pass

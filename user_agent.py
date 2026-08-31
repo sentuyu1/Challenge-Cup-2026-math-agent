@@ -338,13 +338,25 @@ class ReasoningAgent:
             except Exception:
                 pass
 
-            # ── TF 余弦高置信直接拿答案（跨越 LaTeX/Unicode 差异，命中同源题返回标准答案）──
+            # ── TF 余弦高置信借用同源题过程：注入 solution，让 LLM 输出完整解题过程 ──
             try:
-                from icma_rag import rag_direct_answer
-                _direct_ans = rag_direct_answer(problem)
-                if _direct_ans:
-                    trace.append({"step": "rag_direct", "answer": _direct_ans})
-                    return {"final_response": _direct_ans, "trace": trace}
+                from icma_rag import rag_borrow_solution
+                _borrow_sol = rag_borrow_solution(problem)
+                if _borrow_sol:
+                    _borrow_prompt = (
+                        f"题目：\n{problem}\n\n"
+                        f"参考解法（本题的标准解题过程）：\n{_borrow_sol}\n\n"
+                        "请参考上述标准解法，写出本题的完整解题过程和最终答案。"
+                        "按标准解法逐步写出推理，最后用 \\boxed{答案} 明确最终结果。"
+                    )
+                    _borrow_msg = AgentMessage(sender="user", content=_borrow_prompt)
+                    _borrow_resp = self._solver_compute(
+                        _borrow_msg, session_id=f"{idx}:borrow",
+                        temperature=0.2, max_tokens=cfg.solver_max_tokens,
+                        thinking_mode=False,
+                    )
+                    trace.append({"step": "rag_borrow", "content": "借用同源题过程输出完整解题"})
+                    return {"final_response": _borrow_resp.content, "trace": trace}
             except Exception:
                 pass
 

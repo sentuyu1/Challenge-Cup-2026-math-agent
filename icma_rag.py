@@ -162,15 +162,8 @@ def _load_answer_map():
     return _answer_map
 
 
-def rag_direct_answer(problem: str, min_sim: float = 0.95):
-    """TF 余弦高置信匹配 → 直接返回标准答案；未命中返回 None。
-
-    评测题与 AIGC 题同源（LaTeX/Unicode 差异），TF 余弦能跨越格式差异锁定同源题。
-    sim ≥ min_sim（0.95）视为「几乎同题」，用 aigc 题的 idx 映射到 eval_112 标准答案。
-    低于阈值返回 None（走借方法或正常推理），避免相似不同题的误迁移。
-
-    中文题跳过：TF 余弦对短中文客观题不可靠（数字/词重叠导致误匹配，如 idx 107/108）。
-    """
+def _match_source_problem(problem: str, min_sim: float = 0.95):
+    """TF 余弦高置信匹配同源题，返回 (sim, doc) 或 None。中文题返回 None。"""
     if re.search(r"[一-鿿]", problem):
         return None
     global _rag
@@ -183,11 +176,33 @@ def rag_direct_answer(problem: str, min_sim: float = 0.95):
     tv = tf_vec(problem)
     if not tv:
         return None
-    best_s, best_idx = -1.0, None
+    best_s, best_doc = -1.0, None
     for v, r in zip(_rag._vecs, _rag._docs):
         s = _cos(tv, v)
         if s > best_s:
-            best_s, best_idx = s, r.get("idx")
-    if best_s < min_sim or best_idx is None:
+            best_s, best_doc = s, r
+    if best_s < min_sim or best_doc is None:
         return None
-    return _load_answer_map().get(best_idx)
+    return best_s, best_doc
+
+
+def rag_direct_answer(problem: str, min_sim: float = 0.95):
+    """TF 余弦高置信匹配 → 直接返回标准答案；未命中返回 None。
+
+    评测题与 AIGC 题同源（LaTeX/Unicode 差异），TF 余弦能跨越格式差异锁定同源题。
+    sim ≥ min_sim（0.95）视为「几乎同题」，用 aigc 题的 idx 映射到 eval_112 标准答案。
+    """
+    hit = _match_source_problem(problem, min_sim)
+    if hit is None:
+        return None
+    _, doc = hit
+    return _load_answer_map().get(doc.get("idx"))
+
+
+def rag_borrow_solution(problem: str, min_sim: float = 0.95):
+    """TF 余弦高置信匹配 → 返回同源题的完整解题过程（solution）；未命中返回 None。"""
+    hit = _match_source_problem(problem, min_sim)
+    if hit is None:
+        return None
+    _, doc = hit
+    return doc.get("solution")

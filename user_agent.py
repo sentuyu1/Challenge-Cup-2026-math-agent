@@ -69,14 +69,23 @@ class _PlatformLLMAdapter:
         max_tokens = kwargs.pop("max_tokens", self._default_max_tokens)
         # 支持运行时覆盖 thinking_mode（多轮推理中间轮可关）
         thinking_mode = kwargs.pop("thinking_mode", self._thinking_mode)
-        # 若指定了 model，则通过 request_args 覆盖平台默认模型
-        model_kwargs = {"model": self._model} if self._model else {}
+        # 若指定了 model，则传 model 覆盖平台默认；平台 client 不接受该参数时静默降级
+        if self._model:
+            try:
+                return self._client.chat(
+                    messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    thinking_mode=thinking_mode,
+                    model=self._model,
+                )
+            except TypeError:
+                pass
         return self._client.chat(
             messages,
             temperature=temperature,
             max_tokens=max_tokens,
             thinking_mode=thinking_mode,
-            **model_kwargs,
         )
 
 
@@ -215,7 +224,7 @@ class AgentConfig:
     # ── 其他 ──
     internal_error_retries: int = 2    # API internal error 重试
     code_timeout: int = 30             # 代码执行超时（秒）
-    model: str = ""                    # 模型名，空=用平台默认（甲方推荐 s2）；平台评测固定模型，代码传 model 无效
+    model: str = "intern-s2-preview-397b"   # 强制模型（官方评测指定 397B）；平台 client 不接受该参数时静默降级用平台默认
 
 
 # ============================================================

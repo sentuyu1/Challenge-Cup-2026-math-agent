@@ -363,7 +363,7 @@ class ReasoningAgent:
                     _borrow_msg = AgentMessage(sender="user", content=_borrow_prompt)
                     _borrow_resp = self._solver_compute(
                         _borrow_msg, session_id=f"{idx}:borrow",
-                        temperature=0.6, max_tokens=cfg.solver_max_tokens,
+                        temperature=0.3, max_tokens=cfg.solver_max_tokens,
                         thinking_mode=False,
                     )
                     trace.append({"step": "rag_borrow", "content": "借用同源题思路，用自己的话重写完整解题"})

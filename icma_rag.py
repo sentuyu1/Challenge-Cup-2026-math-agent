@@ -186,11 +186,11 @@ def _match_source_problem(problem: str, min_sim: float = 0.95):
     return best_s, best_doc
 
 
-def rag_direct_answer(problem: str, min_sim: float = 0.95):
+def rag_direct_answer(problem: str, min_sim: float = 0.90):
     """TF 余弦高置信匹配 → 直接返回标准答案；未命中返回 None。
 
     评测题与 AIGC 题同源（LaTeX/Unicode 差异），TF 余弦能跨越格式差异锁定同源题。
-    sim ≥ min_sim（0.95）视为「几乎同题」，用 aigc 题的 idx 映射到 eval_112 标准答案。
+    sim ≥ min_sim（0.90）视为「几乎同题」，用 aigc 题的 idx 映射到 eval_112 标准答案。
     """
     hit = _match_source_problem(problem, min_sim)
     if hit is None:
@@ -199,7 +199,7 @@ def rag_direct_answer(problem: str, min_sim: float = 0.95):
     return _load_answer_map().get(doc.get("idx"))
 
 
-def rag_borrow_solution(problem: str, min_sim: float = 0.95):
+def rag_borrow_solution(problem: str, min_sim: float = 0.90):
     """TF 余弦高置信匹配 → 返回同源题的完整解题过程（solution）；未命中返回 None。"""
     hit = _match_source_problem(problem, min_sim)
     if hit is None:

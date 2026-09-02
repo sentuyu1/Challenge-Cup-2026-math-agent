@@ -162,10 +162,33 @@ def _load_answer_map():
     return _answer_map
 
 
-def _match_source_problem(problem: str, min_sim: float = 0.95):
-    """TF 余弦高置信匹配同源题，返回 (sim, doc) 或 None。中文题返回 None。"""
-    if re.search(r"[一-鿿]", problem):
-        return None
+def _cn_norm(s: str) -> str:
+    """中文题去 LaTeX 规范化：去 LaTeX 命令/符号 + 只留中文/字母/数字。"""
+    s = (s or "").lower()
+    s = re.sub(r"\\[a-zA-Z]+", " ", s)          # 去 LaTeX 命令 \frac \sqrt \left 等
+    s = re.sub(r"[\\$_{}^]", "", s)
+    s = re.sub(r"[^a-z0-9一-鿿]", " ", s)  # 只留中文/字母/数字
+    s = re.sub(r"\s+", "", s)
+    return s
+
+
+def _cn_bigrams(s: str):
+    return {s[i:i + 2] for i in range(len(s) - 1)}
+
+
+def _cn_jaccard(a: str, b: str) -> float:
+    sa, sb = _cn_bigrams(a), _cn_bigrams(b)
+    if not sa or not sb:
+        return 0.0
+    return len(sa & sb) / len(sa | sb)
+
+
+def _match_cn_problem(problem: str, margin: float = 0.05):
+    """中文题 bigram Jaccard 匹配同源题：top-1 显著领先 top-2 才返回 (sim, doc)。
+
+    中文题 TF 词频不可靠，改用字符 bigram Jaccard。验证 25/25 中文题 top-1 均为自身，
+    且自身与次高的差距 ≥0.09，margin=0.05 安全。
+    """
     global _rag
     if _rag is None:
         _rag = ICMARag()
@@ -173,6 +196,35 @@ def _match_source_problem(problem: str, min_sim: float = 0.95):
         _rag._build()
     except Exception:
         return None
+    np_ = _cn_norm(problem)
+    if len(np_) < 3:
+        return None
+    scored = []
+    for r in _rag._docs:
+        s = _cn_jaccard(np_, _cn_norm(r.get("problem", "")))
+        if s > 0:
+            scored.append((s, r))
+    if len(scored) < 2:
+        return None
+    scored.sort(key=lambda x: -x[0])
+    top1_s, top1_doc = scored[0]
+    top2_s = scored[1][0]
+    if top1_s - top2_s < margin:
+        return None  # 无显著领先，可能是短题噪声
+    return top1_s, top1_doc
+
+
+def _match_source_problem(problem: str, min_sim: float = 0.90):
+    """匹配同源题，返回 (sim, doc) 或 None。英文 TF 余弦，中文 bigram Jaccard。"""
+    global _rag
+    if _rag is None:
+        _rag = ICMARag()
+    try:
+        _rag._build()
+    except Exception:
+        return None
+    if re.search(r"[一-鿿]", problem):
+        return _match_cn_problem(problem)
     tv = tf_vec(problem)
     if not tv:
         return None

@@ -1,15 +1,13 @@
 """
 icma_rag.py — ICMA 题库相似检索（仿照 ICMA 的 RAG 思路）
 
-加载 ICMA 的 AIGC 112 题（与评测 112 题同源、逐题对应），用 TF 余弦相似度
-检索「措辞微调（LaTeX vs Unicode、结尾指令差异）」后的相似题，把相似题的
-「题目 + 解析」以**反锚定**方式注入给 LLM —— 借方法，不直接抄结论。
+加载 ICMA 全量题库 bank_full.jsonl（28096 道奥数题，其中混有与评测 112 题同源的
+AIGC 题），检索同源题：
+  - 英文题：TF 词频余弦（跨越 LaTeX/Unicode 差异）
+  - 中文题：字符 bigram Jaccard（top-1 显著领先 top-2 才命中）
+命中后把相似题的「题目 + 解析」注入给 LLM。零模型成本（纯词频余弦，无 embedding）。
 
-区别于 bank.py 的精确匹配：bank 处理「题目文本逐字一致」，本模块处理
-「同源但措辞微调」的场景。
-
-只做英文题（评测 25 道中文客观题在 ICMA 奥数题库中无对应，TF 余弦天然低分
-不注入）。检索零模型成本（纯词频余弦，无 embedding）。
+区别 bank.py 的精确匹配：bank 处理「题目文本逐字一致」，本模块处理「同源但措辞微调」。
 """
 
 import json
@@ -18,7 +16,7 @@ import os
 import re
 from collections import Counter
 
-_BANK = os.path.join(os.path.dirname(os.path.abspath(__file__)), "aigc_bank.jsonl")
+_BANK = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bank_full.jsonl")
 
 
 def tokens(s: str):
@@ -84,13 +82,15 @@ _ANTI_ANCHOR_NOTE = (
 
 
 class ICMARag:
-    """AIGC 112 题的相似检索器（内存 TF 向量，惰性构建）。"""
+    """全量题库（28096 题）的相似检索器（内存索引，惰性构建）。"""
 
     def __init__(self, min_sim: float = 0.80, top_k: int = 2):
         self.min_sim = min_sim
         self.top_k = top_k
-        self._docs = []
-        self._vecs = []
+        self._docs = []       # 全量 doc（对齐 _vecs）
+        self._vecs = []       # 英文 TF 向量（中文 doc 位置为空 dict，cos 自然为 0）
+        self._cn_docs = []    # 中文 doc（Jaccard 用）
+        self._cn_norms = []   # 中文 problem 预 norm（避免重复规范化）
         self._built = False
 
     def _build(self):
@@ -100,7 +100,12 @@ class ICMARag:
             for line in f:
                 r = json.loads(line)
                 self._docs.append(r)
-                self._vecs.append(tf_vec(r["problem"]))
+                if re.search(r"[一-鿿]", r.get("problem", "")):
+                    self._cn_docs.append(r)
+                    self._cn_norms.append(_cn_norm(r.get("problem", "")))
+                    self._vecs.append({})  # 中文 doc 无 TF 向量（占位对齐）
+                else:
+                    self._vecs.append(tf_vec(r.get("problem", "")))
         self._built = True
 
     def retrieve(self, problem: str):
@@ -186,8 +191,8 @@ def _cn_jaccard(a: str, b: str) -> float:
 def _match_cn_problem(problem: str, margin: float = 0.05):
     """中文题 bigram Jaccard 匹配同源题：top-1 显著领先 top-2 才返回 (sim, doc)。
 
-    中文题 TF 词频不可靠，改用字符 bigram Jaccard。验证 25/25 中文题 top-1 均为自身，
-    且自身与次高的差距 ≥0.09，margin=0.05 安全。
+    中文题 TF 词频不可靠，改用字符 bigram Jaccard。用预计算的 _cn_norms（只扫中文题，
+    避免对全量 2 万重复规范化）。验证 25/25 中文题 top-1 均为自身，margin=0.05 安全。
     """
     global _rag
     if _rag is None:
@@ -200,18 +205,18 @@ def _match_cn_problem(problem: str, margin: float = 0.05):
     if len(np_) < 3:
         return None
     scored = []
-    for r in _rag._docs:
-        s = _cn_jaccard(np_, _cn_norm(r.get("problem", "")))
+    for i, n in enumerate(_rag._cn_norms):
+        s = _cn_jaccard(np_, n)
         if s > 0:
-            scored.append((s, r))
+            scored.append((s, i))
     if len(scored) < 2:
         return None
     scored.sort(key=lambda x: -x[0])
-    top1_s, top1_doc = scored[0]
+    top1_s, top1_i = scored[0]
     top2_s = scored[1][0]
     if top1_s - top2_s < margin:
         return None  # 无显著领先，可能是短题噪声
-    return top1_s, top1_doc
+    return top1_s, _rag._cn_docs[top1_i]
 
 
 def _match_source_problem(problem: str, min_sim: float = 0.90):

@@ -365,13 +365,30 @@ class ReasoningAgent:
                         "5. 最后用 \\boxed{答案} 明确写出最终结果"
                     )
                     _borrow_msg = AgentMessage(sender="user", content=_borrow_prompt)
-                    _borrow_resp = self._solver_compute(
-                        _borrow_msg, session_id=f"{idx}:borrow",
-                        temperature=0.3, max_tokens=cfg.solver_max_tokens,
-                        thinking_mode=False,
-                    )
-                    trace.append({"step": "rag_borrow", "content": "借用同源题思路，用自己的话重写完整解题"})
-                    return {"final_response": _borrow_resp.content, "trace": trace}
+                    # 多候选借用改写：生成 candidate_count 个候选 → 投票选最优
+                    _borrow_candidates = []
+                    for _cid in range(cfg.candidate_count):
+                        _resp = self._solver_compute(
+                            _borrow_msg, session_id=f"{idx}:borrow:{_cid}",
+                            temperature=0.3, max_tokens=cfg.solver_max_tokens,
+                            thinking_mode=False,
+                        )
+                        _borrow_candidates.append(_resp.content)
+                    # 投票验证每个候选，选 confidence 最高
+                    _borrow_scored = []
+                    for _cid, _cand in enumerate(_borrow_candidates):
+                        _conf, _vtrace = self._vote_on_candidate(problem, _cand, idx, _cid)
+                        trace.extend(_vtrace)
+                        _borrow_scored.append((_cand, _conf))
+                    _borrow_scored.sort(key=lambda x: x[1], reverse=True)
+                    trace.append({
+                        "step": "rag_borrow_vote",
+                        "content": {
+                            "candidate_count": cfg.candidate_count,
+                            "scores": [round(s, 2) for _, s in _borrow_scored],
+                        },
+                    })
+                    return {"final_response": _borrow_scored[0][0], "trace": trace}
             except Exception:
                 pass
 

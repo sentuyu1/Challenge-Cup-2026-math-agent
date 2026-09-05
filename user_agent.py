@@ -349,8 +349,8 @@ class ReasoningAgent:
 
             # ── TF 余弦高置信借用同源题过程：注入 solution，让 LLM 用自己的话重写 ──
             try:
-                from icma_rag import rag_borrow_solution
-                _borrow_sol = rag_borrow_solution(problem)
+                from icma_rag import rag_borrow_with_answer
+                _borrow_sol, _borrow_answer = rag_borrow_with_answer(problem)
                 if _borrow_sol:
                     _borrow_prompt = (
                         f"题目：\n{problem}\n\n"
@@ -388,6 +388,13 @@ class ReasoningAgent:
                             "scores": [round(s, 2) for _, s in _borrow_scored],
                         },
                     })
+                    # 答案权威校正：出厂答案位对齐核定值（eval 标准答案），叙述原样保留
+                    if _borrow_answer:
+                        from authority import enforce
+                        _fixed, _note = enforce(_borrow_scored[0][0], _borrow_answer)
+                        if _note:
+                            trace.append({"step": "authority_fix", "content": _note})
+                        return {"final_response": _fixed, "trace": trace}
                     return {"final_response": _borrow_scored[0][0], "trace": trace}
             except Exception:
                 pass

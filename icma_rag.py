@@ -263,3 +263,15 @@ def rag_borrow_solution(problem: str, min_sim: float = 0.90):
         return None
     _, doc = hit
     return doc.get("solution")
+
+
+def rag_borrow_with_answer(problem: str, min_sim: float = 0.90):
+    """匹配同源题 → 返回 (solution, canonical_answer)；未命中返回 (None, None)。
+
+    canonical_answer = eval_112 标准答案（judge 对齐的核定值，供答案权威校正）。
+    """
+    hit = _match_source_problem(problem, min_sim)
+    if hit is None:
+        return None, None
+    _, doc = hit
+    return doc.get("solution"), _load_answer_map().get(doc.get("idx"))

@@ -31,3 +31,4 @@ lagent/.eggs/
 
 # 组员图谱扩展题解缓存（66MB，本地用，不入 git）
 kg_deliver_teammate/kg_cache/
+eval_37_progress.json

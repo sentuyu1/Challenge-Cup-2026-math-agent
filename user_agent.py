@@ -421,6 +421,17 @@ class ReasoningAgent:
                 except Exception:
                     _skill_context = ""
 
+            # ── 知识图谱注入（技术创新展示，MATH_AGENT_GRAPH=1 开启；默认关不影响评测）──
+            if os.environ.get("MATH_AGENT_GRAPH", "0") == "1":
+                try:
+                    from knowledge_graph import graph_query
+                    _gctx = graph_query(problem)
+                    if _gctx:
+                        problem = f"{problem}\n\n[知识图谱参考] 本题可沿图谱定位相关定理：\n{_gctx}\n"
+                        trace.append({"step": "knowledge_graph", "content": "注入图谱相关定理"})
+                except Exception:
+                    pass
+
             # ── 确定性求解器：sympy/scipy 直接算整题答案（零 LLM 成本，移植自 LangGraph）──
             try:
                 from deterministic_solver import deterministic_solve

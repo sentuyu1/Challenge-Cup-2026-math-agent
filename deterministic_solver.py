@@ -250,6 +250,49 @@ def _solve_game_consecutive(problem: str) -> str:
 
 
 # 求解器注册表（按特异性排序，先匹配先返回）
+# ── 通用机型化题型（求导 / 解方程；保守：明确可解析才返回，否则空）──
+_SYMPY_LOCALS = None
+
+
+def _solve_general_sympy(problem: str) -> str:
+    """通用 sympy 机型化求解（求导/解方程）。解析不确定返回空串。"""
+    p = problem or ""
+    try:
+        import sympy as sp
+    except Exception:
+        return ""
+    x = sp.Symbol("x")
+    ns = {"x": x, "sin": sp.sin, "cos": sp.cos, "tan": sp.tan, "log": sp.log,
+          "exp": sp.exp, "sqrt": sp.sqrt, "pi": sp.pi, "oo": sp.oo}
+
+    # 求导：f(x)=<expr>，题面含「导数/求导/derivative」
+    if re.search(r"导数|求导|derivative", p, re.I):
+        m = re.search(r"[fF]\s*\(\s*x\s*\)\s*=\s*([0-9a-zA-Z\^\+\-\*/\(\)\.\s]+)", p)
+        if m:
+            try:
+                expr = sp.sympify(_latex_to_sympy(m.group(1)), locals=ns)
+                d = sp.simplify(sp.diff(expr, x))
+                pt = re.search(r"x\s*=\s*([-\d.]+)", p)
+                if pt:
+                    return str(sp.simplify(d.subs(x, sp.sympify(pt.group(1)))))
+                return str(d)
+            except Exception:
+                return ""
+
+    # 解方程：<expr> = 0，题面含「方程的根/解方程/零点/roots」
+    if re.search(r"方程的?根|解方程|求.*的根|求.*的解|的解集|零点|roots?|solutions?", p, re.I):
+        m = re.search(r"([0-9a-zA-Z\^\+\-\*/\(\)\.\s]{3,})=\s*0", p)
+        if m:
+            try:
+                expr = sp.sympify(_latex_to_sympy(m.group(1)), locals=ns)
+                sols = sp.solve(expr, x)
+                if sols:
+                    return "、".join(str(s) for s in sols)
+            except Exception:
+                return ""
+    return ""
+
+
 _SOLVERS = [
     _solve_probability_seats,
     _solve_laplacian_circle,
@@ -259,6 +302,7 @@ _SOLVERS = [
     _solve_digit_sum,
     _solve_game_plus1_or_2n,
     _solve_game_consecutive,
+    _solve_general_sympy,
 ]
 
 

@@ -485,6 +485,16 @@ class ReasoningAgent:
                     if _cards:
                         problem = f"{problem}\n\n参考知识卡片：\n{_cards}"
                         trace.append({"step": "objective_cards", "content": "注入客观题知识卡片"})
+                    # L2 知识层：客观概念题用图谱概念消歧 + 方法论（MATH_AGENT_KG=1）
+                    if os.environ.get("MATH_AGENT_KG", "0") == "1":
+                        try:
+                            from kg_deliver_teammate.kg_bridge_example import kg_hint
+                            _kgh = kg_hint(problem, max_len=1200)
+                            if _kgh:
+                                problem = f"{problem}\n\n{_kgh}"
+                                trace.append({"step": "objective_kg", "content": "图谱概念消歧注入"})
+                        except Exception:
+                            pass
             except Exception:
                 pass
 

@@ -51,6 +51,12 @@ def _norm_answer(s: str) -> str:
     return s
 
 
+# ── 评测模式开关 ──
+# "borrow"（默认）：题海主力模式（同源检索+权威校正，91%）
+# "real"：真实能力模式（关题海，开知识增强/图谱/代码验证/判分器，测新题基线）
+_REAL_MODE = os.environ.get("MATH_AGENT_MODE", "real") == "real"
+
+
 # ============================================================
 # 平台 Client 适配器
 # ============================================================
@@ -351,7 +357,7 @@ class ReasoningAgent:
             try:
                 from bank import bank_lookup
                 # MATH_AGENT_BORROW=0 时关闭题库查表（实测纯推理基线用；默认开）
-                _bank_ans = None if os.environ.get("MATH_AGENT_BORROW", "1") != "1" else bank_lookup(problem)
+                _bank_ans = None if os.environ.get("MATH_AGENT_BORROW", "0" if _REAL_MODE else "1") != "1" else bank_lookup(problem)
                 if _bank_ans:
                     trace.append({"step": "bank_hit", "answer": _bank_ans})
                     return {"final_response": _bank_ans, "trace": trace}
@@ -362,7 +368,7 @@ class ReasoningAgent:
             try:
                 from icma_rag import rag_borrow_with_answer
                 # MATH_AGENT_BORROW=0 时关闭借用改写（实测纯推理基线用；默认开）
-                _borrow_sol, _borrow_answer = (None, None) if os.environ.get("MATH_AGENT_BORROW", "1") != "1" else rag_borrow_with_answer(problem)
+                _borrow_sol, _borrow_answer = (None, None) if os.environ.get("MATH_AGENT_BORROW", "0" if _REAL_MODE else "1") != "1" else rag_borrow_with_answer(problem)
                 if _borrow_sol:
                     _borrow_prompt = (
                         f"题目：\n{problem}\n\n"
@@ -413,18 +419,19 @@ class ReasoningAgent:
 
             # ── ICMA 相似检索（仿 RAG）：检索同源近似题，注入解析借方法（不直接抄结论）──
             _reference = ""
-            try:
-                from icma_rag import rag_reference_block
-                # 相似题检索借方法（推理路径本是非同源兜底，阈值放宽到 0.5 多参考）
-                _reference = rag_reference_block(problem, min_sim=0.5)
-                if _reference:
-                    trace.append({"step": "icma_rag", "content": "检索到相似题，注入参考解析"})
-            except Exception:
-                _reference = ""
+            if os.environ.get("MATH_AGENT_RAG", "1") == "1":   # 关掉可不加载全量库（省内存）
+                try:
+                    from icma_rag import rag_reference_block
+                    # 相似题检索借方法（推理路径本是非同源兜底，阈值放宽到 0.5 多参考）
+                    _reference = rag_reference_block(problem, min_sim=0.5)
+                    if _reference:
+                        trace.append({"step": "icma_rag", "content": "检索到相似题，注入参考解析"})
+                except Exception:
+                    _reference = ""
 
             # ── 领域 skill 手册注入（移植自 ICMA：分类后注入对应领域解题方法论）──
             _skill_context = ""
-            if os.environ.get("MATH_AGENT_SKILL", "0") == "1":
+            if os.environ.get("MATH_AGENT_SKILL", "1" if _REAL_MODE else "0") == "1":
                 try:
                     from skills import skill_context
                     _skill_cat, _skill_excerpt = skill_context(problem)
@@ -435,7 +442,7 @@ class ReasoningAgent:
                     _skill_context = ""
 
             # ── 知识图谱注入（技术创新展示，MATH_AGENT_GRAPH=1 开启；默认关不影响评测）──
-            if os.environ.get("MATH_AGENT_GRAPH", "0") == "1":
+            if os.environ.get("MATH_AGENT_GRAPH", "1" if _REAL_MODE else "0") == "1":
                 try:
                     from knowledge_graph import graph_query
                     _gctx = graph_query(problem)
@@ -446,7 +453,7 @@ class ReasoningAgent:
                     pass
 
             # ── 问题蒸馏 + 结构检索（MATH_AGENT_DISTILL=1）：抽结构 → 定位同类解法 + RAG 借方法 ──
-            if os.environ.get("MATH_AGENT_DISTILL", "0") == "1":
+            if os.environ.get("MATH_AGENT_DISTILL", "1" if _REAL_MODE else "0") == "1":
                 try:
                     from problem_distill import distill_problem
 
@@ -497,7 +504,7 @@ class ReasoningAgent:
                         problem = f"{problem}\n\n参考知识卡片：\n{_cards}"
                         trace.append({"step": "objective_cards", "content": "注入客观题知识卡片"})
                     # L2 知识层：客观概念题用图谱概念消歧 + 方法论（MATH_AGENT_KG=1）
-                    if os.environ.get("MATH_AGENT_KG", "0") == "1":
+                    if os.environ.get("MATH_AGENT_KG", "1" if _REAL_MODE else "0") == "1":
                         try:
                             from kg_deliver_teammate.kg_bridge_example import kg_hint
                             _kgh = kg_hint(problem, max_len=1200)
@@ -541,7 +548,7 @@ class ReasoningAgent:
             # ══════════════════════════════════════════════════════
             # ③ 多轮层次化推理（Intern-S1-MO 核心：推理→摘要引理→复用）
             # ══════════════════════════════════════════════════════
-            best_text, reason_trace = self._multi_round_reason(problem, analysis, strategy, idx, is_proof, _reference, _skill_context, budget, _rounds)
+            best_text, reason_trace = self._multi_round_reason(problem, analysis, strategy, idx, is_proof, _reference, _skill_context, budget, _rounds, _difficulty)
             trace.extend(reason_trace)
 
             trace.append({
@@ -551,7 +558,7 @@ class ReasoningAgent:
 
             # ── 独立 Python 求解（交叉验证：确定性计算 > LLM 推理，仅计算题）──
             _python_answer = None
-            if os.environ.get("MATH_AGENT_PYTHON", "0") == "1" and not is_proof:
+            if os.environ.get("MATH_AGENT_PYTHON", "1" if _REAL_MODE else "0") == "1" and not is_proof:
                 try:
                     _python_answer = self._python_solve(problem, idx)
                     if _python_answer:
@@ -562,7 +569,7 @@ class ReasoningAgent:
             # ── 构建 final_response（判分保护：折叠桌 Finalizer 多层提取 + 结构验证）──
             boxed_answer = extract_boxed(best_text)
 
-            _use_finalizer = os.environ.get("MATH_AGENT_FINALIZER", "0") == "1"
+            _use_finalizer = os.environ.get("MATH_AGENT_FINALIZER", "1" if _REAL_MODE else "0") == "1"
 
             if is_proof:
                 if _use_finalizer:
@@ -737,7 +744,7 @@ class ReasoningAgent:
     # ── 多轮层次化推理（Intern-S1-MO 核心）──
     def _multi_round_reason(
         self, problem: str, analysis: str, strategy: str, idx: int, is_proof: bool,
-        reference: str = "", skill_context: str = "", budget=None, rounds=None,
+        reference: str = "", skill_context: str = "", budget=None, rounds=None, difficulty="medium",
     ) -> Tuple[str, List[Dict]]:
         """多轮层次化推理：每轮「求解 → 摘要引理 → 复用引理继续深挖」。
 
@@ -793,8 +800,14 @@ class ReasoningAgent:
                 )
 
             solve_msg = AgentMessage(sender="user", content=prompt)
-            # 中间轮关 thinking mode（省时间），最后一轮开启深度推理
-            round_thinking = is_final
+            # 分情况 deep thinking：off 全关（本地省时防截断）/ on 全开 / auto 按难度
+            _tp = os.environ.get("MATH_AGENT_THINKING", "auto")
+            if _tp == "off":
+                round_thinking = False
+            elif _tp == "on":
+                round_thinking = True
+            else:  # auto：easy 不深想（快答），其余末轮深推理
+                round_thinking = is_final and (difficulty != "easy")
 
             # ── 最后一轮：多候选 + 投票选最优（叠加广度）；中间轮：单路快速推进 ──
             if is_final and cfg.candidate_count > 1:

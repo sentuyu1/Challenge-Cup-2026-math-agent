@@ -511,10 +511,16 @@ class ReasoningAgent:
                                "构造", "说明其存在", "证明或"]
             is_proof = any(kw in problem for kw in _proof_keywords)
 
+            # ── L0 难度分类 + 分流（简单题减少推理轮数省时；难题保留完整多轮）──
+            from difficulty import classify_difficulty
+            _difficulty = classify_difficulty(problem, is_proof)
+            trace.append({"step": "difficulty", "content": _difficulty})
+            _rounds = 2 if _difficulty == "easy" else cfg.reasoning_rounds
+
             # ══════════════════════════════════════════════════════
             # ③ 多轮层次化推理（Intern-S1-MO 核心：推理→摘要引理→复用）
             # ══════════════════════════════════════════════════════
-            best_text, reason_trace = self._multi_round_reason(problem, analysis, strategy, idx, is_proof, _reference, _skill_context, budget)
+            best_text, reason_trace = self._multi_round_reason(problem, analysis, strategy, idx, is_proof, _reference, _skill_context, budget, _rounds)
             trace.extend(reason_trace)
 
             trace.append({
@@ -710,7 +716,7 @@ class ReasoningAgent:
     # ── 多轮层次化推理（Intern-S1-MO 核心）──
     def _multi_round_reason(
         self, problem: str, analysis: str, strategy: str, idx: int, is_proof: bool,
-        reference: str = "", skill_context: str = "", budget=None,
+        reference: str = "", skill_context: str = "", budget=None, rounds=None,
     ) -> Tuple[str, List[Dict]]:
         """多轮层次化推理：每轮「求解 → 摘要引理 → 复用引理继续深挖」。
 
@@ -725,8 +731,9 @@ class ReasoningAgent:
         lemmas: List[str] = []
         current_solution = ""
 
-        for round_idx in range(cfg.reasoning_rounds):
-            is_final = (round_idx == cfg.reasoning_rounds - 1)
+        _rounds = rounds or cfg.reasoning_rounds
+        for round_idx in range(_rounds):
+            is_final = (round_idx == _rounds - 1)
             # 时间预算：剩余不足以再完成一轮且已有解 → 提前收束（保输出）
             if budget is not None and round_idx > 0 and current_solution \
                     and budget.fast_path(need=180):

@@ -44,6 +44,13 @@ from lagent.schema import AgentMessage
 from utils import extract_code, extract_code_blocks, execute_code, extract_boxed, extract_final_answer, is_correct_vote
 
 
+def _norm_answer(s: str) -> str:
+    """宽松归一化答案用于比对（去 LaTeX 命令 + 符号 + 空白，小写）。"""
+    s = re.sub(r"\\[a-zA-Z]+", "", str(s or "").lower())
+    s = re.sub(r"[\s$\\{}_,，。;；:：()（）]+", "", s)
+    return s
+
+
 # ============================================================
 # 平台 Client 适配器
 # ============================================================
@@ -224,6 +231,7 @@ class AgentConfig:
     # ── 其他 ──
     internal_error_retries: int = 2    # API internal error 重试
     code_timeout: int = 30             # 代码执行超时（秒）
+    time_budget_s: float = 1080.0      # 每题时间预算（秒，约 18min；防超时保输出，见 budget.py）
     model: str = "intern-s2-preview-397b"   # 强制模型（官方评测指定 397B）；平台 client 不接受该参数时静默降级用平台默认
 
 
@@ -335,6 +343,8 @@ class ReasoningAgent:
         trace: List[Dict[str, Any]] = []
         t_start = time.time()
         cfg = self.config
+        from budget import TimeBudget
+        budget = TimeBudget(cfg.time_budget_s)   # 每题时间预算（防超时保输出）
 
         try:
             # ── 题库查表（题海策略）：命中直接返回标准答案，零 LLM 成本、优先级最高 ──
@@ -504,7 +514,7 @@ class ReasoningAgent:
             # ══════════════════════════════════════════════════════
             # ③ 多轮层次化推理（Intern-S1-MO 核心：推理→摘要引理→复用）
             # ══════════════════════════════════════════════════════
-            best_text, reason_trace = self._multi_round_reason(problem, analysis, strategy, idx, is_proof, _reference, _skill_context)
+            best_text, reason_trace = self._multi_round_reason(problem, analysis, strategy, idx, is_proof, _reference, _skill_context, budget)
             trace.extend(reason_trace)
 
             trace.append({
@@ -541,10 +551,16 @@ class ReasoningAgent:
                     else:
                         final_response = best_text[:4000] + "\n\n... (中间过程省略) ...\n\n" + best_text[-4000:]
             else:
-                # 计算题：Python 确定性答案优先（交叉验证），否则 Finalizer 提取推理答案
+                # 计算题：代码交叉验证（Python 确定性答案优先），否则 Finalizer 提取推理答案
                 if _python_answer:
+                    # L4 验证：比对推理答案与代码独立计算结果，记录一致性
+                    _reason_ans = extract_boxed(best_text) or extract_final_answer(best_text) or ""
+                    _agree = _reason_ans and _norm_answer(_python_answer) == _norm_answer(_reason_ans)
+                    trace.append({
+                        "step": "cross_validate",
+                        "content": "code_and_reason_agree" if _agree else "code_override_reason",
+                    })
                     final_response = _python_answer
-                    trace.append({"step": "cross_validate", "content": "python_priority"})
                 elif _use_finalizer:
                     # 计算题/填空：Finalizer 7 层提取 + 11 种结构验证 + 候选选优
                     from finalizer import Finalizer
@@ -593,24 +609,26 @@ class ReasoningAgent:
             })
 
             # ══════════════════════════════════════════════════════
-            # ⑤ 教育启发（基于最终解答）
-            # ══════════════════════════════════════════════════════
-            teach_msg = AgentMessage(
-                sender="user",
-                content=(
-                    f"原题：{problem}\n"
-                    f"最终解答：{best_text[:1200]}\n"
-                    "请生成教学启发。"
-                ),
-            )
-            insight = self._teacher(teach_msg, session_id=f"{idx}:t").content
-            trace.append({
-                "step": "teach",
-                "content": {
-                    "raw": insight,
-                    "note": "本题的教育启发（知识点、技巧、误区、拓展）",
-                },
-            })
+            # ⑤ 教育启发（基于最终解答；时间预算不足则跳过——教学非答案必需）
+            if budget.remaining() > 45:
+                teach_msg = AgentMessage(
+                    sender="user",
+                    content=(
+                        f"原题：{problem}\n"
+                        f"最终解答：{best_text[:1200]}\n"
+                        "请生成教学启发。"
+                    ),
+                )
+                insight = self._teacher(teach_msg, session_id=f"{idx}:t").content
+                trace.append({
+                    "step": "teach",
+                    "content": {
+                        "raw": insight,
+                        "note": "本题的教育启发（知识点、技巧、误区、拓展）",
+                    },
+                })
+            else:
+                trace.append({"step": "teach", "content": "(时间预算不足，跳过教学)"})
 
             elapsed = round(time.time() - t_start, 1)
             trace.append({"step": "finalize", "content": f"耗时 {elapsed}s"})
@@ -692,7 +710,7 @@ class ReasoningAgent:
     # ── 多轮层次化推理（Intern-S1-MO 核心）──
     def _multi_round_reason(
         self, problem: str, analysis: str, strategy: str, idx: int, is_proof: bool,
-        reference: str = "", skill_context: str = "",
+        reference: str = "", skill_context: str = "", budget=None,
     ) -> Tuple[str, List[Dict]]:
         """多轮层次化推理：每轮「求解 → 摘要引理 → 复用引理继续深挖」。
 
@@ -709,6 +727,12 @@ class ReasoningAgent:
 
         for round_idx in range(cfg.reasoning_rounds):
             is_final = (round_idx == cfg.reasoning_rounds - 1)
+            # 时间预算：剩余不足以再完成一轮且已有解 → 提前收束（保输出）
+            if budget is not None and round_idx > 0 and current_solution \
+                    and budget.fast_path(need=180):
+                trace.append({"step": f"round_{round_idx}_skipped",
+                              "content": "时间预算不足，提前收束已有解答"})
+                break
 
             # ── 构造 prompt ──
             if round_idx == 0:

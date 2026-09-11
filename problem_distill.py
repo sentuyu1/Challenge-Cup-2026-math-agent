@@ -18,11 +18,11 @@ import re
 _DISTILL_PROMPT = (
     "你是数学问题结构分析师。请对下面的数学题做「问题蒸馏」——抽象出题目结构与解法要点，"
     "**去掉具体数值和表面措辞**，只保留可迁移的结构信息。\n\n"
-    "严格输出 JSON（不要多余文字）：\n"
-    '{"domain": "所属数学领域(如 组合计数/数论/图论/博弈/几何/分析)", '
-    '"structure": "问题结构骨架的一句话描述(替换掉具体数字为 N/M/k 等符号)", '
-    '"key_objects": ["关键数学对象", "..."], '
-    '"methods": ["适用的方法/定理", "..."]}\n\n'
+    "严格输出 JSON（字段值用**英文**，便于跨语言检索；不要多余文字）：\n"
+    '{"domain": "math field (combinatorics/number theory/games/geometry/analysis/...)", '
+    '"structure": "one-sentence problem structure (replace numbers with N/M/k symbols)", '
+    '"key_objects": ["key mathematical objects", "..."], '
+    '"methods": ["applicable methods/theorems", "..."]}\n\n'
     "题目：\n{problem}"
 )
 

@@ -415,7 +415,8 @@ class ReasoningAgent:
             _reference = ""
             try:
                 from icma_rag import rag_reference_block
-                _reference = rag_reference_block(problem)
+                # 相似题检索借方法（推理路径本是非同源兜底，阈值放宽到 0.5 多参考）
+                _reference = rag_reference_block(problem, min_sim=0.5)
                 if _reference:
                     trace.append({"step": "icma_rag", "content": "检索到相似题，注入参考解析"})
             except Exception:
@@ -444,10 +445,10 @@ class ReasoningAgent:
                 except Exception:
                     pass
 
-            # ── 问题蒸馏（MATH_AGENT_DISTILL=1）：抽结构描述，跨表达定位同类解法（借鉴 AAAI26）──
+            # ── 问题蒸馏 + 结构检索（MATH_AGENT_DISTILL=1）：抽结构 → 定位同类解法 + RAG 借方法 ──
             if os.environ.get("MATH_AGENT_DISTILL", "0") == "1":
                 try:
-                    from problem_distill import distill_context
+                    from problem_distill import distill_problem
 
                     def _dchat(p):
                         _m = AgentMessage(sender="user", content=p)
@@ -456,10 +457,20 @@ class ReasoningAgent:
                             temperature=0.1, max_tokens=800, thinking_mode=False,
                         ).content
 
-                    _dctx = distill_context(problem, _dchat)
-                    if _dctx:
-                        problem = f"{problem}\n\n{_dctx}\n"
-                        trace.append({"step": "problem_distill", "content": "注入问题结构蒸馏"})
+                    _d = distill_problem(problem, _dchat)
+                    if _d:
+                        _parts = []
+                        if _d.get("domain"):
+                            _parts.append(f"领域：{_d['domain']}")
+                        if _d.get("structure"):
+                            _parts.append(f"结构：{_d['structure']}")
+                        if _d.get("key_objects"):
+                            _parts.append("关键对象：" + "、".join(str(x) for x in _d["key_objects"][:6]))
+                        if _d.get("methods"):
+                            _parts.append("适用方法/定理：" + "、".join(str(x) for x in _d["methods"][:6]))
+                        if _parts:
+                            problem = f"{problem}\n\n【问题结构蒸馏】{'；'.join(_parts)}\n"
+                            trace.append({"step": "problem_distill", "content": "注入问题结构蒸馏"})
                 except Exception:
                     pass
 

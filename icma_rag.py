@@ -108,8 +108,13 @@ class ICMARag:
                     self._vecs.append(tf_vec(r.get("problem", "")))
         self._built = True
 
-    def retrieve(self, problem: str):
-        """返回 [(similarity, doc), ...]，按相似度降序，低于阈值的不返回。"""
+    def retrieve(self, problem: str, min_sim=None, top_k=None):
+        """返回 [(similarity, doc), ...]，按相似度降序，低于阈值的不返回。
+
+        min_sim/top_k 可覆盖实例默认（新题场景用蒸馏结构词检索时放宽阈值）。
+        """
+        min_sim = self.min_sim if min_sim is None else min_sim
+        top_k = self.top_k if top_k is None else top_k
         try:
             self._build()
         except Exception:
@@ -120,14 +125,15 @@ class ICMARag:
         scored = []
         for v, r in zip(self._vecs, self._docs):
             s = _cos(tv, v)
-            if s >= self.min_sim:
+            if s >= min_sim:
                 scored.append((s, r))
         scored.sort(key=lambda x: -x[0])
-        return scored[: self.top_k]
+        return scored[:top_k]
 
-    def build_reference_block(self, problem: str, problem_chars=1500, solution_chars=3000) -> str:
+    def build_reference_block(self, problem: str, problem_chars=1500, solution_chars=3000,
+                              min_sim=None, top_k=None) -> str:
         """把检索到的相似题拼成反锚定参考区块；无命中返回空串。"""
-        hits = self.retrieve(problem)
+        hits = self.retrieve(problem, min_sim=min_sim, top_k=top_k)
         if not hits:
             return ""
         parts = ["\n\n参考示例（来自数学竞赛题库的相似题目与解答）：\n", _ANTI_ANCHOR_NOTE]
@@ -144,12 +150,15 @@ class ICMARag:
 _rag = None
 
 
-def rag_reference_block(problem: str) -> str:
-    """全局单例入口：检索相似题并生成反锚定参考区块；未命中返回空串。"""
+def rag_reference_block(problem: str, min_sim: float = 0.80) -> str:
+    """全局单例入口：检索相似题并生成反锚定参考区块；未命中返回空串。
+
+    min_sim：相似度阈值。同源场景 0.80 防误迁移；新题借方法可放宽（如 0.5）。
+    """
     global _rag
     if _rag is None:
         _rag = ICMARag()
-    return _rag.build_reference_block(problem)
+    return _rag.build_reference_block(problem, min_sim=min_sim)
 
 
 _EVAL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "eval_112.json")
@@ -275,3 +284,15 @@ def rag_borrow_with_answer(problem: str, min_sim: float = 0.90):
         return None, None
     _, doc = hit
     return doc.get("solution"), _load_answer_map().get(doc.get("idx"))
+
+
+def rag_reference_for_query(query: str, min_sim: float = 0.35, top_k: int = 3) -> str:
+    """用任意查询文本（如问题蒸馏出的结构/方法词）检索题库相关题，返回反锚定参考块。
+
+    难题/复杂题用：蒸馏出结构描述 → 用结构词检索「结构相近」的题 → 借其解法/方法策略。
+    新题（非同源）场景，min_sim 放宽（结构词与题面措辞不同）。
+    """
+    global _rag
+    if _rag is None:
+        _rag = ICMARag()
+    return _rag.build_reference_block(query, min_sim=min_sim, top_k=top_k)

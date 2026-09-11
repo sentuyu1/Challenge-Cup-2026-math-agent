@@ -340,7 +340,8 @@ class ReasoningAgent:
             # ── 题库查表（题海策略）：命中直接返回标准答案，零 LLM 成本、优先级最高 ──
             try:
                 from bank import bank_lookup
-                _bank_ans = bank_lookup(problem)
+                # MATH_AGENT_BORROW=0 时关闭题库查表（实测纯推理基线用；默认开）
+                _bank_ans = None if os.environ.get("MATH_AGENT_BORROW", "1") != "1" else bank_lookup(problem)
                 if _bank_ans:
                     trace.append({"step": "bank_hit", "answer": _bank_ans})
                     return {"final_response": _bank_ans, "trace": trace}
@@ -350,7 +351,8 @@ class ReasoningAgent:
             # ── TF 余弦高置信借用同源题过程：注入 solution，让 LLM 用自己的话重写 ──
             try:
                 from icma_rag import rag_borrow_with_answer
-                _borrow_sol, _borrow_answer = rag_borrow_with_answer(problem)
+                # MATH_AGENT_BORROW=0 时关闭借用改写（实测纯推理基线用；默认开）
+                _borrow_sol, _borrow_answer = (None, None) if os.environ.get("MATH_AGENT_BORROW", "1") != "1" else rag_borrow_with_answer(problem)
                 if _borrow_sol:
                     _borrow_prompt = (
                         f"题目：\n{problem}\n\n"
@@ -429,6 +431,25 @@ class ReasoningAgent:
                     if _gctx:
                         problem = f"{problem}\n\n[知识图谱参考] 本题可沿图谱定位相关定理：\n{_gctx}\n"
                         trace.append({"step": "knowledge_graph", "content": "注入图谱相关定理"})
+                except Exception:
+                    pass
+
+            # ── 问题蒸馏（MATH_AGENT_DISTILL=1）：抽结构描述，跨表达定位同类解法（借鉴 AAAI26）──
+            if os.environ.get("MATH_AGENT_DISTILL", "0") == "1":
+                try:
+                    from problem_distill import distill_context
+
+                    def _dchat(p):
+                        _m = AgentMessage(sender="user", content=p)
+                        return self._solver_compute(
+                            _m, session_id=f"{idx}:distill",
+                            temperature=0.1, max_tokens=800, thinking_mode=False,
+                        ).content
+
+                    _dctx = distill_context(problem, _dchat)
+                    if _dctx:
+                        problem = f"{problem}\n\n{_dctx}\n"
+                        trace.append({"step": "problem_distill", "content": "注入问题结构蒸馏"})
                 except Exception:
                     pass
 

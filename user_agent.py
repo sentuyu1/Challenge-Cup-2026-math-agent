@@ -54,7 +54,7 @@ def _norm_answer(s: str) -> str:
 # ── 评测模式开关 ──
 # "borrow"（默认）：题海主力模式（同源检索+权威校正，91%）
 # "real"：真实能力模式（关题海，开知识增强/图谱/代码验证/判分器，测新题基线）
-_REAL_MODE = os.environ.get("MATH_AGENT_MODE", "real") == "real"
+_REAL_MODE = os.environ.get("MATH_AGENT_MODE", "borrow") == "real"
 
 
 # ============================================================

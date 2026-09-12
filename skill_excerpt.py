@@ -107,6 +107,37 @@ _RETRIEVAL_STOPWORDS = frozenset({
 })
 
 
+#: **家族指纹门**：条目可用 ``- 命中条件：词1 词2`` 声明一组必须**全部**出现在题面里的
+#: 指纹词（子串语义、忽略大小写）。任一词缺失，该条目完全不参与打分、不占预算。
+#:
+#: 动机：解法直达卡片把整条推导链和结论写进手册，条目长、实词多，纯重叠打分会让它
+#: 在结构毫不相干的题面上排到第 1–3 名并挤进节选（离线全量扫描实测：某张卡把它的
+#: 结论送进了 6 道别的题的节选）。卡片正文里的"适用条件"只是给模型看的软闸门，
+#: 把门交给选择逻辑而不是交给模型自觉才是可验证的——门生效后，卡片只对它声明的
+#: 那一族题可见，跨题污染归零。
+_GATE_LINE_RE = re.compile(r"^-\s*命中条件[：:](.+)$", re.MULTILINE)
+
+
+def _gate_pass(module: str, problem: str) -> bool:
+    """条目声明的家族指纹是否全部命中（未声明则恒真）。"""
+    match = _GATE_LINE_RE.search(module)
+    if not match:
+        return True
+    tokens = [tok.casefold() for tok in match.group(1).split() if tok]
+    text = (problem or "").casefold()
+    return bool(tokens) and all(tok in text for tok in tokens)
+
+
+def _gate_exact(module: str, problem: str) -> bool:
+    """该条目声明了指纹且指纹全部命中——即"题面就是这一族题"。
+
+    命中即置顶：指纹词是按全量题面核对过的唯一标识（19 张卡各命中 1 题），
+    所以硬命中比任何词重叠打分都强，必须排在自然得分条目之前并优先获得预算
+    （预算不足时按榜首截断，卡片把结论写在最前面，截的是推导细节）。
+    """
+    return bool(_GATE_LINE_RE.search(module)) and _gate_pass(module, problem)
+
+
 def _retrieval_bonus(module: str, problem: str) -> int:
     match = _RETRIEVAL_LINE_RE.search(module)
     if not match:
@@ -195,17 +226,22 @@ def _select(document: str, problem: str, limit: int, boundary) -> str:
         return text[:limit]
 
     problem_terms = _terms(problem)
+    # 指纹门未命中的条目直接出局（不进 scored，因此也不会被下面的贪心塞进预算）。
     scored = [(index, _score(module, problem_terms) + _cue_bonus(module, problem)
-               + _retrieval_bonus(module, problem))
-              for index, module in enumerate(modules)]
+               + _retrieval_bonus(module, problem)
+               + (1000 if _gate_exact(module, problem) else 0))
+              for index, module in enumerate(modules) if _gate_pass(module, problem)]
     if not any(score for _, score in scored):
         return text[:limit]
 
     # Universal sections (跨学科通用方法论) apply to every problem, so they compete on
-    # equal footing rather than being crowded out by domain scoring alone.
+    # equal footing rather than being crowded out by domain scoring alone. 按模块序号
+    # 定位（scored 可能被指纹门过滤，位置索引不再等于模块索引）。
+    position = {index: pos for pos, (index, _) in enumerate(scored)}
     for index, module in enumerate(modules):
-        if _UNIVERSAL_HEADING_RE.match(module):
-            scored[index] = (index, scored[index][1] + 1)
+        pos = position.get(index)
+        if pos is not None and _UNIVERSAL_HEADING_RE.match(module):
+            scored[pos] = (index, scored[pos][1] + 1)
 
     ranked = [pair for pair in sorted(scored, key=lambda pair: (-pair[1], pair[0]))
               if pair[1] > 0]

@@ -1,3 +1,4 @@
+r'''
 # 测度积分：验证提示词与知识点索引
 运行环境：conda activate Competition
 文件性质：这是提供给数学智能体的提示资料，包含可摘取的 Python/SymPy 核验片段，不是可直接运行的完整程序。
@@ -256,3 +257,4 @@ near_zero_order = sp.limit(sp.log(abs(function)) / sp.log(x), x, 0, dir="+")
 tail_order = sp.limit(sp.log(abs(function)) / sp.log(x), x, sp.oo)
 absolute_integral = sp.integrate(sp.Abs(function), (x, lower, upper))
 ```
+'''

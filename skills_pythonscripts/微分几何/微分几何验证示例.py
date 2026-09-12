@@ -1,3 +1,4 @@
+r'''
 # 微分几何：验证提示词与知识点索引
 运行环境：conda activate Competition
 文件性质：这是面向数学智能体的说明型提示资料，包含可摘取的 SymPy 片段，不是可直接运行的完整曲线/曲面计算程序。
@@ -242,3 +243,4 @@ import sympy as sp
 minimal_equation = sp.simplify(mean_curvature)
 area_first_variation = sp.simplify(first_variation)
 ```
+'''

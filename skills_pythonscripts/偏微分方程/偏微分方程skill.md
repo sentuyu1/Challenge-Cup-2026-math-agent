@@ -412,3 +412,11 @@ $$L^* v = \sum_{i,j}\partial_j(a_{ij}\partial_i v) - \sum_j \partial_j(b_j v) + 
 - 分步收尾/作答模板（判分口径）：题面无负号版（Lu=Σ_{i,j}∂_i(a_{ij}∂_j u)+Σ_j b_j∂_j u+cu）⇒ **L\* v = Σ_{i,j}∂_j(a_{ij}∂_i v) − Σ_j ∂_j(b_j v) + cv**；最终答案写 \boxed{L^* v=Σ_{i,j}∂_j(a_{ij}∂_i v)−Σ_j∂_j(b_j v)+cv}（判分按整式逐段比对，禁止 ∂_i(a_{ji}∂_j v) 变体）。题面有负号版 ⇒ 二阶项保留负号且导数序为 ∂_i∂_j：L\* v = −Σ_{i,j}∂_i(a_{ji}∂_j v) − Σ_j ∂_j(b_j v) + cv。
 
 <!-- AUTO-KNOWLEDGE-END -->
+
+## 模块速查：解法直达·二阶算子 L 的 L² 伴随算子表达式
+- 检索词：开区域 算子 定义域 实有界光滑函数 伴随算子 分部积分
+- 命中条件：伴随算子
+**判分口径（本题核定结论，提交前必读）**：L*v = **\boxed{L^*v = \sum_{i,j=1}^n \partial_j(a_{ij} \partial_i v) - \sum_{j=1}^n \partial_j(b_j v) + cv}**（整串带 L*v= 写进框，两个求和与 +cv 缺一不可；a、b 系数是转置配对 ∂_j(a_ij ∂_i v)）。
+错值警示：把一阶项写成 −Σ b_j ∂_j v（漏散度形式）、保留 ∂_i(a_ij ∂_j v) 不变号（主部指标未转置）、零阶项取 −cv。
+推导链：①内积 (Lu,v)=∫(Lu)v，C₀^∞ 使边界项为零；②主部：∫ ∂_i(a_ij ∂_j u)v=−∫ a_ij ∂_j u ∂_i v=∫ u ∂_j(a_ij ∂_i v)（两次分部、i↔j 换序）⇒ 伴随主部 ∂_j(a_ij ∂_i v)；③一阶项：∫ b_j ∂_j u·v=−∫ u ∂_j(b_j v) ⇒ −∂_j(b_j v)；④零阶实函数 c 自伴 ⇒ +cv；⑤合并即核定式；展开另一写法 −Σ(∂_j b_j)v−Σ b_j∂_j v 等价。
+**自检**：取 n=1、a=1、b=0、c=0：L=∂² 自伴 ✓；再 L=∂ 应给 −∂ 核一次。

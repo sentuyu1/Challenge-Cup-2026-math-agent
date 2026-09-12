@@ -1,3 +1,4 @@
+r'''
 # 抽象代数：验证提示词与知识点索引
 运行环境：conda activate Competition
 文件性质：这是用于提示数学智能体的知识点说明，包含可摘取的 Python/SymPy 片段，不是可直接运行的完整程序或枚举器。
@@ -168,3 +169,4 @@ partition_types = list(partitions(exponent))
 invariant_orders = [prime ** part for part in partition_types for exponent in part]
 classification_count = len(partition_types)
 ```
+'''

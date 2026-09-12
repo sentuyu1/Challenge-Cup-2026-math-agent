@@ -1,3 +1,4 @@
+r'''
 # 复分析：验证提示词与知识点索引
 运行环境：conda activate Competition
 文件性质：这是供数学智能体参考的说明文本，包含可摘取的 SymPy 代码片段，不是可直接运行的完整程序。
@@ -160,3 +161,4 @@ x, y, D, target = sp.symbols("x y D target", integer=True)
 norm_expression = sp.expand(x ** 2 + D * y ** 2)
 norm_residual = sp.factor(norm_expression - target)
 ```
+'''

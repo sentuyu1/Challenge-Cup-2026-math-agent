@@ -1,3 +1,4 @@
+r'''
 # 概率论：验证提示词与知识点索引
 运行环境：conda activate Competition
 文件性质：这是面向数学智能体的知识说明，包含可摘取的 Python/SymPy 片段，不是可直接运行的完整模拟或统计程序。
@@ -167,3 +168,4 @@ pgf = p / (1 - (1 - p) * s)
 fixed_points = sp.solve(sp.Eq(pgf, s), s)
 mean_from_pgf = sp.simplify(sp.diff(pgf, s).subs(s, 1))
 ```
+'''

@@ -1,3 +1,4 @@
+r'''
 # 运筹学：验证提示词与知识点索引
 运行环境：conda activate Competition
 文件性质：这是数学智能体的验证知识说明，包含可摘取的 Python/SciPy 片段，不是可直接运行的完整优化器或搜索程序。
@@ -180,3 +181,4 @@ from itertools import combinations
 partition_values = [sum(partition[i] for i in subset) for subset in combinations(range(len(partition)), split_size)]
 balanced_gap = min(abs(total - 2 * value) for value in partition_values)
 ```
+'''

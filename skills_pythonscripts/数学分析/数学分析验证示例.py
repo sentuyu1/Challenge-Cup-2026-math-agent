@@ -1,3 +1,4 @@
+r'''
 # 数学分析：验证提示词与知识点索引
 运行环境：conda activate Competition
 文件性质：这是供数学智能体使用的说明型提示资料，包含可摘取的 Python/SymPy 片段，不是可直接运行的完整程序。
@@ -157,3 +158,4 @@ t, omega = sp.symbols("t omega", real=True)
 fourier_coefficient = sp.integrate(function * sp.exp(-sp.I * omega * t), (t, -sp.pi, sp.pi))
 constraint_gap = sp.factor(objective.subs(variable, candidate_value) - claimed_bound)
 ```
+'''

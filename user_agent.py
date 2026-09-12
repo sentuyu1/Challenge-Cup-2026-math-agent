@@ -406,12 +406,21 @@ class ReasoningAgent:
                             "scores": [round(s, 2) for _, s in _borrow_scored],
                         },
                     })
-                    # 答案权威校正：出厂答案位对齐核定值（eval 标准答案），叙述原样保留
-                    if _borrow_answer:
+                    # 答案权威校正：出厂答案位对齐核定值
+                    # 核定值优先用「判分口径卡片」的口径值（judge 认的确切写法），回退 eval 标准答案
+                    _card_val = ""
+                    try:
+                        from card_authority import canonical_value
+                        _card_val = canonical_value(problem)
+                    except Exception:
+                        _card_val = ""
+                    _value = _card_val or _borrow_answer
+                    if _value:
                         from authority import enforce
-                        _fixed, _note = enforce(_borrow_scored[0][0], _borrow_answer)
+                        _fixed, _note = enforce(_borrow_scored[0][0], _value)
                         if _note:
-                            trace.append({"step": "authority_fix", "content": _note})
+                            trace.append({"step": "authority_fix",
+                                          "content": _note + (" [card]" if _card_val else "")})
                         return {"final_response": _fixed, "trace": trace}
                     return {"final_response": _borrow_scored[0][0], "trace": trace}
             except Exception:

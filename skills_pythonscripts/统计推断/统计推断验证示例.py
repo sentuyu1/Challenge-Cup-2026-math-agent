@@ -1,3 +1,4 @@
+r'''
 # 统计推断：验证提示词与知识点索引
 运行环境：conda activate Competition
 文件性质：这是提示词式的统计验证资料，包含可摘取的 Python/SymPy 片段，不是可直接运行的完整数据分析或随机模拟程序。
@@ -243,3 +244,4 @@ import sympy as sp
 likelihood_ratio = sp.simplify(2 * (log_likelihood_full - log_likelihood_null))
 asymptotic_gap = sp.simplify(likelihood_ratio - chi_square_critical)
 ```
+'''

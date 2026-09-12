@@ -1,3 +1,4 @@
+r'''
 # 线性回归：验证提示词与知识点索引
 运行环境：conda activate Competition
 文件性质：这是供数学智能体参考的说明型验证提示，包含可摘取的 Python/SymPy 片段，不是可直接运行的完整数据拟合程序。
@@ -250,3 +251,4 @@ import sympy as sp
 aic = sp.simplify(sample_size * sp.log(sse / sample_size) + 2 * parameter_count)
 bic = sp.simplify(sample_size * sp.log(sse / sample_size) + parameter_count * sp.log(sample_size))
 ```
+'''

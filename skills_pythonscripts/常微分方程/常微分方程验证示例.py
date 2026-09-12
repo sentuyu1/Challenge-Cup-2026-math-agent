@@ -1,3 +1,4 @@
+r'''
 # 常微分方程：验证提示词与知识点索引
 运行环境：conda activate Competition
 文件性质：这是面向数学智能体的验证说明，包含可摘取的 SymPy 代码片段，不是可直接运行的完整程序。
@@ -269,3 +270,4 @@ log_derivative_gap = sp.simplify(
     sp.diff(sp.log(candidate), x) - sp.diff(candidate, x) / candidate
 )
 ```
+'''

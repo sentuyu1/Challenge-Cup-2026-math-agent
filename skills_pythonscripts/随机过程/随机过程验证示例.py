@@ -1,3 +1,4 @@
+r'''
 # 随机过程：验证提示词与知识点索引
 运行环境：conda activate Competition
 文件性质：这是数学智能体的说明型提示资料，包含可摘取的 Python/SymPy 片段，不是可直接运行的完整随机模拟或数值程序。
@@ -165,3 +166,4 @@ import sympy as sp
 cover_time_bound = sp.simplify((vertices - 1) * sp.log(vertices))
 coupon_gap = sp.simplify(expected_cover_time - cover_time_bound)
 ```
+'''

@@ -1,3 +1,4 @@
+r'''
 # 拓扑学：验证提示词与知识点索引
 运行环境：conda activate Competition
 文件性质：这是面向数学智能体的知识说明，包含可摘取的 Python 片段，不是可直接运行的完整集合枚举或图算法程序。
@@ -156,3 +157,4 @@ dense = all(any(open_set & dense_subset for open_set in topology if point in ope
             for point in points)
 second_countable = countable_basis and all(open_set in generated_topology for open_set in topology)
 ```
+'''

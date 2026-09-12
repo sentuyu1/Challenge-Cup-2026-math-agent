@@ -1,3 +1,4 @@
+r'''
 # 偏微分方程：验证提示词与知识点索引
 运行环境：conda activate Competition
 文件性质：这是数学智能体的验证说明，包含可摘取的 Python/SymPy 片段，不是可直接运行的完整 PDE 求解或离散化程序。
@@ -236,3 +237,4 @@ formal_pairing = sp.integrate(test_function * divergence_operator(candidate), (x
 adjoint_pairing = sp.integrate(formal_adjoint(test_function) * candidate, (x, left, right))
 green_gap = sp.simplify(formal_pairing - adjoint_pairing - boundary_term)
 ```
+'''

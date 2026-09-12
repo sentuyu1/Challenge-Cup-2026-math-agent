@@ -1,3 +1,4 @@
+r'''
 # 离散数学：验证提示词与知识点索引
 运行环境：conda activate Competition
 文件性质：这是说明型提示资料，包含可摘取的 Python/SymPy 片段，不是可直接运行的完整枚举器或搜索程序。
@@ -459,3 +460,4 @@ two_cycles = [(a, apply_map(a)) for a in solutions
               if apply_map(a) != a and apply_map(apply_map(a)) == a]
 solution_branches = {classify_branch(sol) for sol in solutions}
 ```
+'''

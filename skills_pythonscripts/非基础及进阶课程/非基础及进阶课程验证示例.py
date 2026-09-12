@@ -1,3 +1,4 @@
+r'''
 # 非基础及进阶课程：验证提示词与知识点索引
 运行环境：conda activate Competition
 文件性质：这是竞赛数学的说明型提示资料，包含可摘取的 Python/SymPy 片段，不是可直接运行的完整搜索程序或答案库。
@@ -153,3 +154,4 @@ import sympy as sp
 oriented_area = sp.Matrix([[p[0], p[1], 1] for p in points]).det() / 2
 circle_power_gap = sp.factor(distance(point, center) ** 2 - radius ** 2)
 ```
+'''

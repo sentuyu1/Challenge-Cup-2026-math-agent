@@ -1,3 +1,4 @@
+r'''
 # 高等代数：验证提示词与知识点索引
 运行环境：conda activate Competition
 文件性质：这是提示词式验证资料，包含可摘取的 Python/SymPy 代码片段，不是可直接运行的完整矩阵或符号计算程序。
@@ -154,3 +155,4 @@ eigen_data = A.eigenvects()
 geometric_dimensions = {value: len(vectors) for value, _, vectors in eigen_data}
 diagonalizable = sum(geometric_dimensions.values()) == A.rows
 ```
+'''

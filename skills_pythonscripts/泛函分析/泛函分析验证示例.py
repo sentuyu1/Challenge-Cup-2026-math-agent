@@ -1,3 +1,4 @@
+r'''
 # 泛函分析：验证提示词与知识点索引
 运行环境：conda activate Competition
 文件性质：这是供数学智能体调用的提示资料，包含可摘取的 Python/SymPy 代码片段，不是可直接运行的完整程序。
@@ -268,3 +269,4 @@ x, omega = sp.symbols("x omega", real=True)
 transform = sp.integrate(function * sp.exp(-sp.I * omega * x), (x, -sp.oo, sp.oo))
 cauchy_gap = sp.limit(metric(sequence_n, sequence_m), n, sp.oo)
 ```
+'''

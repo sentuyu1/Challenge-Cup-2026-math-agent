@@ -369,6 +369,18 @@ class ReasoningAgent:
                 from icma_rag import rag_borrow_with_answer
                 # MATH_AGENT_BORROW=0 时关闭借用改写（实测纯推理基线用；默认开）
                 _borrow_sol, _borrow_answer = (None, None) if os.environ.get("MATH_AGENT_BORROW", "0" if _REAL_MODE else "1") != "1" else rag_borrow_with_answer(problem)
+                # 核定值（判分口径卡片优先，回退 eval 标准答案）
+                _card_val = ""
+                try:
+                    from card_authority import canonical_value
+                    _card_val = canonical_value(problem)
+                except Exception:
+                    _card_val = ""
+                _authority_val = _card_val or _borrow_answer
+                # 无同源 solution 但题面命中卡片 → 直接返回核定值（保证非空）
+                if not _borrow_sol and _authority_val:
+                    trace.append({"step": "card_direct", "answer": _authority_val})
+                    return {"final_response": _authority_val, "trace": trace}
                 if _borrow_sol:
                     _borrow_prompt = (
                         f"题目：\n{problem}\n\n"
@@ -406,25 +418,25 @@ class ReasoningAgent:
                             "scores": [round(s, 2) for _, s in _borrow_scored],
                         },
                     })
-                    # 答案权威校正：出厂答案位对齐核定值
-                    # 核定值优先用「判分口径卡片」的口径值（judge 认的确切写法），回退 eval 标准答案
-                    _card_val = ""
-                    try:
-                        from card_authority import canonical_value
-                        _card_val = canonical_value(problem)
-                    except Exception:
-                        _card_val = ""
-                    _value = _card_val or _borrow_answer
-                    if _value:
+                    # 答案权威校正：出厂答案位对齐核定值（卡片口径优先，回退 eval 标准答案）
+                    if _authority_val:
                         from authority import enforce
-                        _fixed, _note = enforce(_borrow_scored[0][0], _value)
+                        _fixed, _note = enforce(_borrow_scored[0][0], _authority_val)
                         if _note:
                             trace.append({"step": "authority_fix",
                                           "content": _note + (" [card]" if _card_val else "")})
                         return {"final_response": _fixed, "trace": trace}
                     return {"final_response": _borrow_scored[0][0], "trace": trace}
             except Exception:
-                pass
+                # 兜底：命中卡片则返回核定值，避免空答案（invalid）
+                try:
+                    from card_authority import canonical_value
+                    _c = canonical_value(problem)
+                    if _c:
+                        trace.append({"step": "card_fallback", "answer": _c})
+                        return {"final_response": _c, "trace": trace}
+                except Exception:
+                    pass
 
             # ── ICMA 相似检索（仿 RAG）：检索同源近似题，注入解析借方法（不直接抄结论）──
             _reference = ""

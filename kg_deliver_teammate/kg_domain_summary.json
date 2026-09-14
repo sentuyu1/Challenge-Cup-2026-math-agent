@@ -1,0 +1,93 @@
+{
+  "updated_at": "2026-09-09",
+  "method": "规则聚合（TagRAG 摘要融合思想，非论文原方法）",
+  "domains": {
+    "abstract_algebra": [
+      "高频方法词：solution、answer、prove、number、first、positive、two、integers、der、note",
+      "- (无解答内容 / No solution fou…"
+    ],
+    "aimo_综合": [
+      "高频方法词：solution、found、无解、解答、答内、内容、source、megold、hogy、die",
+      "- (无解答内容 / No solution fou…"
+    ],
+    "algebra": [
+      "高频方法词：solution、answer、equation、first、given、inequality、prove、positive、number、integer",
+      "- (无解答内容 / No solution fou…"
+    ],
+    "calculus": [
+      "高频方法词：solution、answer、found、无解、解答、答内、内容、matematic、olimpiada、sin",
+      "- (无解答内容 / No solution fou…"
+    ],
+    "combinatorics": [
+      "高频方法词：answer、solution、first、note、two、number、points、following、triangle、some",
+      "- (无解答内容 / No solution fou…"
+    ],
+    "complex_analysis": [
+      "高频方法词：inequality、cauchy、schwarz、solution、answer、first、mathbb、two、assume、prove",
+      "- (无解答内容 / No solution fou…"
+    ],
+    "differential_equations": [
+      "高频方法词：die、der、ist、und、kategorie、kolo、eine、von、ein、mit",
+      "- (无解答内容 / No solution fou…"
+    ],
+    "functional_analysis": [
+      "高频方法词：solution、alpha、sin、matematic、olimpiada、cos、megold、answer、etapa、beta",
+      "- (无解答内容 / No solution fou…"
+    ],
+    "geometry": [
+      "高频方法词：varangle、angle、solution、circ、triangle、found、无解、解答、答内、内容",
+      "- (无解答内容 / No solution fou…"
+    ],
+    "graph_theory": [
+      "高频方法词：answer、megold、der、sin、ist、suppose、vec、teh、jel、alpha"
+    ],
+    "linear_algebra": [
+      "高频方法词：angle、die、und、der、von、circ、ist、dreieck、triangle、aus",
+      "- (无解答内容 / No solution fou…"
+    ],
+    "mathematical_physics": [
+      "高频方法词：解题、题思、思路、nplease、answer、output、final、format、boxed、consider",
+      "- 解题思路：Solution…",
+      "- 解题思路：The generalized qua…",
+      "- 解题思路：We claim that the a…",
+      "- 解题思路：NOTATIONS & FIRST C…",
+      "- 解题思路：Some notations :…",
+      "- 解题思路：Day 1:…",
+      "- 解题思路：Question…"
+    ],
+    "number_theory": [
+      "高频方法词：prime、megold、solution、hogy、romsz、circ、found、alpha、无解、解答",
+      "- (无解答内容 / No solution fou…",
+      "- (无解答内容 / No…"
+    ],
+    "numerical_analysis": [
+      "高频方法词：solution、matrix、formula、cube、prove、claim、suppose、denote、two、eine",
+      "- (无解答内容 / No solution fou…"
+    ],
+    "operations_research": [
+      "高频方法词：answer"
+    ],
+    "partial_differential_equations": [
+      "高频方法词：pde、方程、程类、类型、型题、题目、elliptic、poisson、diffusion、heat",
+      "- PDE 方程类型: poisson (ellip…",
+      "- PDE 方程类型: convection_dif…",
+      "- PDE 方程类型: heat (paraboli…",
+      "- PDE 方程类型: navier_stokes …",
+      "- PDE 方程类型: reaction_diffu…",
+      "- PDE 方程类型: helmholtz (ell…",
+      "- PDE 方程类型: stokes (incomp…",
+      "- PDE 方程类型: biharmonic (el…"
+    ],
+    "probability": [
+      "高频方法词：answer、solution、probability、cap、note、vspace、binom、found、godine、razred",
+      "- (无解答内容 / No solution fou…"
+    ],
+    "real_analysis": [
+      "高频方法词：solution、angle、prime、answer、proof、triangle、overline、die、mathbb、positive",
+      "- (无解答内容 / No solution fou…"
+    ],
+    "topology": [
+      "高频方法词：answer、solution、proof、die、number、der、two、first、connected、graph"
+    ]
+  }
+}

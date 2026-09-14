@@ -1,0 +1,110 @@
+[
+  {
+    "id": "pde_001",
+    "domain": "偏微分方程",
+    "difficulty": "medium",
+    "problem": "求解一维热传导方程的初边值问题：u_t = u_xx, x ∈ [0, π], t > 0，边界条件 u(0,t) = u(π,t) = 0，初始条件 u(x,0) = sin(x)。请给出 u(x,t) 的表达式。"
+  },
+  {
+    "id": "complex_001",
+    "domain": "复分析",
+    "difficulty": "medium",
+    "problem": "计算复积分 ∮_{|z|=1} (e^z / z) dz，其中积分路径是单位圆，方向为逆时针。"
+  },
+  {
+    "id": "topology_001",
+    "domain": "拓扑学",
+    "difficulty": "easy",
+    "problem": "实数轴 R 上的标准拓扑中，开区间 (0,1) 是否是开集？请回答是或否。"
+  },
+  {
+    "id": "optimization_001",
+    "domain": "运筹学",
+    "difficulty": "medium",
+    "problem": "某工厂生产 A、B 两种产品。生产 1 件 A 需要 2 小时机器时间和 3 小时人工时间，利润 40 元；生产 1 件 B 需要 3 小时机器时间和 2 小时人工时间，利润 50 元。现有机器时间 60 小时，人工时间 60 小时。求最大利润及对应的 A、B 产量。"
+  },
+  {
+    "id": "real_analysis_001",
+    "domain": "实分析",
+    "difficulty": "medium",
+    "problem": "判断级数 Σ_{n=1}^∞ 1/n^2 是否收敛，若收敛求其和。"
+  },
+  {
+    "id": "linear_algebra_001",
+    "domain": "线性代数",
+    "difficulty": "easy",
+    "problem": "求矩阵 A = [[2, 1], [1, 2]] 的特征值。"
+  },
+  {
+    "id": "abstract_algebra_001",
+    "domain": "抽象代数",
+    "difficulty": "easy",
+    "problem": "在群 Z_6（整数模 6 加法群）中，元素 2 的阶是多少？"
+  },
+  {
+    "id": "probability_001",
+    "domain": "概率论",
+    "difficulty": "easy",
+    "problem": "掷一枚公平骰子一次，出现偶数点数的概率是多少？"
+  },
+  {
+    "id": "statistics_001",
+    "domain": "数理统计",
+    "difficulty": "easy",
+    "problem": "给定样本数据 2, 4, 6, 8, 10，求样本均值。"
+  },
+  {
+    "id": "numerical_001",
+    "domain": "数值分析",
+    "difficulty": "medium",
+    "problem": "用牛顿迭代法求方程 f(x) = x^2 - 2 = 0 的正根，取初值 x_0 = 2，计算迭代一步后的 x_1。"
+  },
+  {
+    "id": "diff_geo_001",
+    "domain": "微分几何",
+    "difficulty": "medium",
+    "problem": "求平面曲线 y = x^2 在点 (0,0) 处的曲率。"
+  },
+  {
+    "id": "number_theory_001",
+    "domain": "数论",
+    "difficulty": "easy",
+    "problem": "求 123 除以 7 的余数。"
+  },
+  {
+    "id": "combinatorics_001",
+    "domain": "组合数学",
+    "difficulty": "easy",
+    "problem": "从 5 个人中选出 2 个人组成一组，有多少种不同的选法？"
+  },
+  {
+    "id": "graph_theory_001",
+    "domain": "图论",
+    "difficulty": "easy",
+    "problem": "完全图 K_5 有多少条边？"
+  },
+  {
+    "id": "logic_001",
+    "domain": "数理逻辑",
+    "difficulty": "easy",
+    "problem": "命题 (P ∧ ¬P) 的真值是什么？请回答 真 或 假。"
+  },
+  {
+    "id": "ode_001",
+    "domain": "常微分方程",
+    "difficulty": "easy",
+    "problem": "求解常微分方程 dy/dx = y，初始条件 y(0) = 1。"
+  },
+  {
+    "id": "functional_001",
+    "domain": "泛函分析",
+    "difficulty": "medium",
+    "problem": "在希尔伯特空间 R^2 中，向量 (3,4) 的范数（欧几里得范数）是多少？"
+  },
+  {
+    "id": "discrete_math_001",
+    "domain": "离散数学",
+    "difficulty": "easy",
+    "problem": "集合 A = {1, 2, 3} 的幂集有多少个元素？"
+  }
+]

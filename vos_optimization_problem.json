@@ -1,0 +1,8 @@
+[
+  {
+    "id": "vos_optimization_001",
+    "domain": "优化理论",
+    "difficulty": "hard",
+    "problem": "考虑一个光滑凸目标函数 f(x)（可能具有非光滑正则化项 g(x)），全局优化问题为：\n\n min_{x∈R^n} F(x) = f(x) + g(x)\n\n其中 f 是光滑凸函数（梯度 Lipschitz 常数为 L），g 是可能非光滑的凸正则化项（如 L1 范数）。给定初始点 x_0。\n\n请从连续时间动力系统视角推导统一的变量与算符分裂（Variable and Operator Splitting, VOS）框架，要求：\n\n1. **连续时间动力系统建模**：将梯度下降、Nesterov 加速梯度法（NAG）和 ADMM 分别建模为特定的常微分方程（ODE），写出各自的动力系统形式：\n   - 梯度流（Gradient Flow）：ẋ(t) = -∇f(x(t))\n   - Nesterov 加速流：ẋ + (3/t)ẋ + ∇f(x) = 0（二阶 ODE）\n   - 增广拉格朗日流（ADMM 对应的鞍点动力系统）\n\n2. **李雅普诺夫函数构造**：\n   - 对 Nesterov 加速法，构造强李雅普诺夫函数 E(t) = t^2(f(x(t)) - f^*) + (1/2)||x(t) + tẋ(t) - x^*||^2\n   - 证明 Ė(t) ≤ 0，从而得到 f(x(t)) - f^* ≤ O(1/t^2) 的加速收敛率\n   - 对 ADMM，构造增广拉格朗日函数作为李雅普诺夫函数，证明其沿轨线单调递减\n\n3. **离散化与算法对应**：\n   - 对 Nesterov ODE 使用适当的离散化方案（如将 3/t 替换为 3/k），推导出 Nesterov 加速梯度法的迭代格式：\n     y_k = x_k + β_k(x_k - x_{k-1})\n     x_{k+1} = y_k - α_k∇f(y_k)\n   - 对 ADMM ODE 使用算子分裂（前向-后向分裂），推导出 ADMM 的标准迭代格式：\n     x_{k+1} = argmin_x { f(x) + (ρ/2)||x - z_k + u_k||^2 }\n     z_{k+1} = argmin_z { g(z) + (ρ/2)||x_{k+1} - z + u_k||^2 }\n     u_{k+1} = u_k + x_{k+1} - z_{k+1}\n\n4. **收敛性分析**：\n   - 对光滑凸情况（g=0），证明 Nesterov 加速法达到 O(1/k^2) 收敛率\n   - 对含非光滑项的一般情况，证明 ADMM 的 O(1/k) 遍历收敛率\n   - 讨论强凸假设下如何得到线性收敛率（O(ρ^k)，0<ρ<1）\n\n5. **数值验证**：编写 Python 代码验证理论结果：\n   - 选取测试函数 f(x)=x^T A x（A 为对称正定矩阵，条件数较大如 1000）\n   - 比较梯度下降、Nesterov 加速法、ADMM 三者的收敛曲线（log(f(x_k)-f^*) vs 迭代次数）\n   - 验证 Nesterov 法达到 O(1/k^2) 收敛，梯度下降为 O(1/k)\n\n请用 LaTeX 写出完整推导，最终总结 VOS 框架的统一数学结构和核心结论。"
+  }
+]

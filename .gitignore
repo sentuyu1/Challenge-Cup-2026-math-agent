@@ -1,0 +1,38 @@
+# Intern-S1 数学智能体系统
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# 结果文件（太大，不提交）
+results_*.json
+*_output.json
+test_result.json
+my_results.json
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# 环境变量（含 API 密钥）
+.env
+
+# Lagent egg-info 缓存（源码保留，只排除构建产物）
+lagent/**/__pycache__/
+lagent/**/*.pyc
+lagent/**/*.pyo
+lagent/*.egg-info/
+lagent/.eggs/
+
+# 临时文件
+*.log
+
+# 组员图谱扩展题解缓存（66MB，本地用，不入 git）
+kg_deliver_teammate/kg_cache/
+eval_37_progress.json
+
+# 内部答辩材料（含敏感复盘，不入仓库）
+DEFENSE_STORY.md
+eval_reasoning_progress.json

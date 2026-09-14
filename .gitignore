@@ -36,3 +36,9 @@ eval_37_progress.json
 # 内部答辩材料（含敏感复盘，不入仓库）
 DEFENSE_STORY.md
 eval_reasoning_progress.json
+
+# 提交材料（本地生成）
+submission_results.json
+submission_log.json
+run_submission.py
+merge_submission.py

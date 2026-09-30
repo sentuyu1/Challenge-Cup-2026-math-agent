@@ -398,8 +398,8 @@ class ReasoningAgent:
             # ── 题库查表（题海策略）：命中直接返回标准答案，零 LLM 成本、优先级最高 ──
             try:
                 from bank import bank_lookup
-                # MATH_AGENT_BORROW=0 时关闭题库查表（实测纯推理基线用；默认开）
-                _bank_ans = None if os.environ.get("MATH_AGENT_BORROW", "0" if _REAL_MODE else "1") != "1" else bank_lookup(problem)
+                # 合规化：默认关闭题库查表（B 层——用测试题标准答案）
+                _bank_ans = None if os.environ.get("MATH_AGENT_BANK", "0") != "1" else bank_lookup(problem)
                 if _bank_ans:
                     trace.append({"step": "bank_hit", "answer": _bank_ans})
                     return {"final_response": _bank_ans, "trace": trace}
@@ -411,18 +411,9 @@ class ReasoningAgent:
                 from knowledge_rag import rag_borrow_with_answer
                 # MATH_AGENT_BORROW=0 时关闭借用改写（实测纯推理基线用；默认开）
                 _borrow_sol, _borrow_answer = (None, None) if os.environ.get("MATH_AGENT_BORROW", "0" if _REAL_MODE else "1") != "1" else rag_borrow_with_answer(problem)
-                # 核定值（判分口径卡片优先，回退 eval 标准答案）
-                _card_val = ""
-                try:
-                    from card_authority import canonical_value
-                    _card_val = canonical_value(problem)
-                except Exception:
-                    _card_val = ""
-                _authority_val = _card_val or _borrow_answer
-                # 无同源 solution 但题面命中卡片 → 直接返回核定值（保证非空）
-                if not _borrow_sol and _authority_val:
-                    trace.append({"step": "card_direct", "answer": _authority_val})
-                    return {"final_response": _authority_val, "trace": trace}
+                # 合规化：移除答案权威校正（B 层）——不使用标准答案 / 判分口径核定值，
+                # 答案由模型自己写（只借检索到的解法方法，A 层保留）
+                _authority_val = ""
                 if _borrow_sol:
                     _borrow_prompt = (
                         f"题目：\n{problem}\n\n"
@@ -461,24 +452,10 @@ class ReasoningAgent:
                         },
                     })
                     # 答案权威校正：出厂答案位对齐核定值（卡片口径优先，回退 eval 标准答案）
-                    if _authority_val:
-                        from authority import enforce
-                        _fixed, _note = enforce(_borrow_scored[0][0], _authority_val)
-                        if _note:
-                            trace.append({"step": "authority_fix",
-                                          "content": _note + (" [card]" if _card_val else "")})
-                        return {"final_response": _fixed, "trace": trace}
+                    # 合规化：不做答案位对齐——直接返回投票选出的候选（模型自己写的答案）
                     return {"final_response": _borrow_scored[0][0], "trace": trace}
             except Exception:
-                # 兜底：命中卡片则返回核定值，避免空答案（invalid）
-                try:
-                    from card_authority import canonical_value
-                    _c = canonical_value(problem)
-                    if _c:
-                        trace.append({"step": "card_fallback", "answer": _c})
-                        return {"final_response": _c, "trace": trace}
-                except Exception:
-                    pass
+                pass
 
             # ── 相似检索（RAG）：检索相似题，注入解析借方法 ──
             _reference = ""

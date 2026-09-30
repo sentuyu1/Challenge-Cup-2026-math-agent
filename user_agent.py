@@ -280,7 +280,7 @@ class AgentConfig:
     internal_error_retries: int = 2    # API internal error 重试
     code_timeout: int = 30             # 代码执行超时（秒）
     time_budget_s: float = 1080.0      # 每题时间预算（秒，约 18min；防超时保输出，见 budget.py）
-    model: str = "intern-s2-preview-397b"   # 强制模型（官方评测指定 397B）；平台 client 不接受该参数时静默降级用平台默认
+    model: str = "intern-s2"   # 官方推荐 Intern-S2-397B（正式版，非 preview）；平台不接受时静默降级
 
 
 # ============================================================

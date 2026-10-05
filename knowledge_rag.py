@@ -290,7 +290,7 @@ def rag_borrow_solution(problem: str, min_sim: float = 0.90):
     return doc.get("solution")
 
 
-def rag_borrow_with_answer(problem: str, min_sim: float = 0.90):
+def rag_borrow_with_answer(problem: str, min_sim: float = 0.75):
     """匹配同源题 → 返回 (solution, canonical_answer)；未命中返回 (None, None)。
 
     canonical_answer = reference_answers 标准答案（供答案权威校正）。

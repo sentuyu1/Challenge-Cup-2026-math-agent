@@ -75,8 +75,26 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 
+# ── 模块路径自举 ──
+# 平台可能以 exec() 方式加载本文件，此时不设 __file__（参考基线常规 import 则有）。
+# 无防御时 os.path.abspath(__file__) 会抛 NameError，导致整个模块加载失败、
+# 全部题目 invalid 且零次 API 调用。
+try:
+    _HERE = os.path.dirname(os.path.abspath(__file__))
+except NameError:                     # 平台 exec() 场景：退回当前工作目录
+    _HERE = os.getcwd()
+
+try:                                  # 补上 __file__，供本模块后续逻辑使用
+    __file__
+except NameError:
+    __file__ = os.path.join(_HERE, "user_agent.py")
+
+# 项目根目录入 sys.path，保证 exec() 加载时 bank / knowledge_rag 等子模块仍可 import
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+
 # ── Lagent 框架路径 ──
-_LAGENT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lagent")
+_LAGENT_DIR = os.path.join(_HERE, "lagent")
 if os.path.isdir(_LAGENT_DIR):
     sys.path.insert(0, _LAGENT_DIR)
 
@@ -102,11 +120,185 @@ _REAL_MODE = os.environ.get("MATH_AGENT_MODE", "borrow") == "real"
 # ============================================================
 # 平台 Client 适配器
 # ============================================================
+def _normalize_chat_response(resp, _depth: int = 0) -> str:
+    """把平台 client 的各种返回形态统一成 str（单点收口）。
+
+    ════════════════════════════════════════════════════════
+      平台 client 返回值
+            │
+      ┌─────▼──────┐
+      │ 形态判定    │
+      └──┬───┬───┬──┘
+         │   │   │
+       str  dict 对象
+         │   │   │
+         ▼   ▼   ▼
+       原样  choices/ / content blocks / message
+                │
+                ▼
+              递归展开 → str
+    ════════════════════════════════════════════════════════
+
+    不同版本的平台/官方 client 返回过至少四种形态，任何一种没解析出来都会
+    表现为「模型看起来没回答」，进而整题 invalid 零分：
+
+      ① str                                        —— 参考基线约定形态
+      ② OpenAI 兼容 dict：{"choices":[{"message":{"content": ...}}]}
+      ③ content blocks ：{"content":[{"type":"text","text": "..."}]}
+      ④ 对象形态       ：带 .content / .text / .message 属性
+
+    本函数做纯防御解析，**任何输入都返回 str，绝不抛异常**。
+    """
+    if resp is None:
+        return ""
+    if isinstance(resp, str):
+        return resp
+    if _depth > 4:                       # 防病态嵌套 / 循环引用
+        return str(resp)
+
+    if isinstance(resp, dict):
+        choices = resp.get("choices")
+        if isinstance(choices, (list, tuple)) and choices:
+            return _normalize_chat_response(choices[0], _depth + 1)
+        for key in ("content", "message", "text"):
+            if key in resp and resp.get(key) is not None:
+                return _normalize_chat_response(resp.get(key), _depth + 1)
+        return ""
+
+    if isinstance(resp, (list, tuple)):
+        parts = []
+        for blk in resp:
+            if isinstance(blk, dict):
+                inner = blk.get("text")
+                if inner is None:
+                    inner = blk.get("content")
+                parts.append(_normalize_chat_response(inner, _depth + 1))
+            else:
+                parts.append(_normalize_chat_response(blk, _depth + 1))
+        return "".join(parts)
+
+    for attr in ("content", "text", "message"):   # 对象形态
+        v = getattr(resp, attr, None)
+        if v is not None and not callable(v):
+            return _normalize_chat_response(v, _depth + 1)
+    return str(resp)
+
+
+# ── LLM 调用重试与退避 ──
+# 线上环境会出现限流（429 / 配额）与瞬时故障（超时 / 连接重置 / 5xx）。
+# 一次失败就放弃 = 把这一题的分直接丢掉；但短退避又会连续撞墙、白烧时间预算，
+# 故限流类给 15s / 20s 的长退避，其余给 1s / 2s 的指数退避。
+_MAX_LLM_ATTEMPTS = 2                      # 最多重试 1 次——重试本身也吃预算，不能贪多
+
+_RATE_LIMIT_HINTS = ("429", "rate limit", "rate_limit", "配额", "quota",
+                     "busy", "overloaded", "too many", "并发")
+_TRANSIENT_HINTS = ("timeout", "timed out", "超时", "connection", "reset",
+                    "502", "503", "504", "server error", "服务器")
+
+
+def _is_retryable(err_text: str) -> bool:
+    """只有限流 / 瞬时故障才值得重试；逻辑错误重试多少次都一样。"""
+    low = str(err_text or "").lower()
+    return any(h in low for h in _RATE_LIMIT_HINTS + _TRANSIENT_HINTS)
+
+
+def _retry_delay(err_text: str, attempt: int, backoff: float = 2.0) -> float:
+    """退避秒数：限流类 15s / 20s，其余 1s / 2s。"""
+    low = str(err_text or "").lower()
+    if any(h in low for h in _RATE_LIMIT_HINTS):
+        return max(backoff ** (attempt - 1), 10.0 + 5.0 * attempt)
+    return backoff ** (attempt - 1)
+
+
+# ── 异构第二路径 ──
+# 多个候选若共用同一句 prompt，只是"同一条思路采样多次"——它们会一起犯同一个错。
+# 强制其中一个候选换方法论，才能给候选池带来真正的多样性。
+_DIVERSE_METHODS = (
+    "① 构造与枚举：先在小规模实例上找规律，再严格推广\n"
+    "② 不变量与极端原理：寻找变换下保持不变的量，或用极端情形卡边界\n"
+    "③ 反向与归谬：假设结论不成立，推出矛盾\n"
+    "④ 生成函数与递推：把问题转成幂级数或递推关系"
+)
+
+
+def _diverse_hint_for(problem: str, is_proof: bool = False) -> str:
+    """中 / 难题返回「独立第二解法」提示；简单题返回空串（成本 > 收益）。"""
+    try:
+        from difficulty import classify_difficulty
+        if classify_difficulty(problem, is_proof) not in ("medium", "hard"):
+            return ""
+    except Exception:
+        return ""
+    return (
+        "\n\n【独立第二解法】你是**第二位独立解题者**，禁止沿用惯用思路。"
+        "必须从下面四种结构性方法中选一种，并在解答开头注明所选方法：\n"
+        + _DIVERSE_METHODS +
+        "\n若所选方法确实走不通，说明原因后再换一种；不要照抄常规解法。"
+    )
+
+
+def _vote_excerpt(text: str, limit: int = 3000) -> str:
+    """投票用摘录：头（思路） + 尾（结论）。
+
+    原实现直接 `text[:3000]` —— 砍掉后半段，而解答的结构是
+    「问题分析 → 详细推导 → \\boxed{最终答案}」，**最终答案恰恰在末尾**。
+    结果是投票者在看不到答案的情况下判断"这份解答对不对"，等于让它盲猜，
+    直接拉低"选对候选"的概率。
+
+    改为头 2/3 + 尾 1/3：既保留解题思路，又保证最终答案完整可见。
+    """
+    t = text or ""
+    if len(t) <= limit:
+        return t
+    head = limit * 2 // 3
+    tail = limit - head
+    return t[:head] + "\n\n[... 中间推导略 ...]\n\n" + t[-tail:]
+
+
+# ── 截断续写 ──
+# 线上实测（100 题）：约 66~68 次输出被 max_tokens 截断（≈3.7% 的请求）。
+# 被截断的解答末尾没有 \boxed{答案}，轻则这一题拿不到答案，重则让投票者
+# 对着半截解答做判断。续写比"整个重跑"省一半时间，也不会丢掉已经正确
+# 生成的前半部分。
+_CONTINUE_PROMPT = (
+    "你的上一条回复因为长度限制被截断了。请**从中断的地方接着写**，"
+    "直接续写剩余内容，不要重复已经写过的部分，不要重新开始，"
+    "也不要加任何解释、道歉或总结性的话。"
+)
+
+
+def _looks_truncated(text: str, max_tokens: int) -> bool:
+    """判断模型输出是否被 max_tokens 截断（保守：宁漏勿误——误判只是多花一次调用）。
+
+    只有两种情形判截断：
+      ① **结构未闭合**——LaTeX 花括号或代码围栏不成对（明确证据）；
+      ② **长度已接近 token 上限，且结尾不是完整结尾**（半句话被切断）。
+    """
+    t = (text or "").rstrip()
+    if len(t) < 300:
+        return False
+    if t.count("{") > t.count("}"):
+        return True
+    if t.count("```") % 2 == 1:
+        return True
+    try:
+        limit_chars = float(max_tokens) * 0.8
+    except Exception:
+        limit_chars = float("inf")
+    if len(t) >= limit_chars and not re.search(r"[。.！!？?）)\]}]\s*$", t[-30:]):
+        return True
+    return False
+
+
 class _PlatformLLMAdapter:
     """把平台提供的 client 包装成 Lagent 兼容的 LLM 后端。
 
     平台 client 接口（参考 baseline llm_client.py）：
         client.chat(messages, temperature=0.2, max_tokens=4096, thinking_mode=False) -> str
+
+    返回值统一经 `_normalize_chat_response` 收口——平台不同版本返回 str /
+    OpenAI 兼容 dict / content blocks / 对象，都在这里展平成 str，
+    避免下游把结构化对象当文本用而静默产生空回答。
 
     model 参数：空字符串 = 使用平台默认模型（零风险）；填了 = 覆盖模型名。
     通过 baseline 的 chat(**request_args) 机制传 model 覆盖默认值。
@@ -119,12 +311,8 @@ class _PlatformLLMAdapter:
         self._thinking_mode = thinking_mode
         self._model = model
 
-    def chat(self, messages: list, **kwargs) -> str:
-        temperature = kwargs.pop("temperature", self._default_temperature)
-        max_tokens = kwargs.pop("max_tokens", self._default_max_tokens)
-        # 支持运行时覆盖 thinking_mode（多轮推理中间轮可关）
-        thinking_mode = kwargs.pop("thinking_mode", self._thinking_mode)
-        # 若指定了 model，则传 model 覆盖平台默认；平台 client 不接受该参数时静默降级
+    def _invoke(self, messages, temperature, max_tokens, thinking_mode):
+        """实际调用平台 client（含 model 覆盖的静默降级）。"""
         if self._model:
             try:
                 return self._client.chat(
@@ -134,7 +322,7 @@ class _PlatformLLMAdapter:
                     thinking_mode=thinking_mode,
                     model=self._model,
                 )
-            except TypeError:
+            except TypeError:            # 平台 client 不接受 model 参数 → 退回默认模型
                 pass
         return self._client.chat(
             messages,
@@ -142,6 +330,54 @@ class _PlatformLLMAdapter:
             max_tokens=max_tokens,
             thinking_mode=thinking_mode,
         )
+
+    def _chat_with_retry(self, messages, temperature, max_tokens, thinking_mode) -> str:
+        """带限流退避的单次调用，返回归一化后的文本。"""
+        last_err = None
+        for attempt in range(1, _MAX_LLM_ATTEMPTS + 1):
+            try:
+                return _normalize_chat_response(
+                    self._invoke(messages, temperature, max_tokens, thinking_mode)
+                )
+            except Exception as exc:
+                last_err = exc
+                if attempt >= _MAX_LLM_ATTEMPTS or not _is_retryable(str(exc)):
+                    raise
+                try:
+                    time.sleep(_retry_delay(str(exc), attempt))
+                except Exception:
+                    pass
+        raise last_err
+
+    def chat(self, messages: list, **kwargs) -> str:
+        temperature = kwargs.pop("temperature", self._default_temperature)
+        max_tokens = kwargs.pop("max_tokens", self._default_max_tokens)
+        # 支持运行时覆盖 thinking_mode（多轮推理中间轮可关）
+        thinking_mode = kwargs.pop("thinking_mode", self._thinking_mode)
+
+        # 限流 / 瞬时故障重试：一次失败就放弃等于把这一题的分直接丢掉。
+        out = self._chat_with_retry(messages, temperature, max_tokens, thinking_mode)
+
+        # ── 截断续写 ──
+        # 被截断的解答末尾没有 \boxed{答案}：轻则这题拿不到答案，重则让投票者
+        # 对着半截解答判断对错。续写只多花一次调用（只在真截断时触发），
+        # 且不会丢掉已经正确生成的前半部分。
+        # 短输出场景（如投票的 "VERDICT: A"）天然不会被判截断。
+        if (max_tokens >= 1024
+                and isinstance(messages, list) and messages
+                and isinstance(messages[0], dict)
+                and _looks_truncated(out, max_tokens)):
+            try:
+                cont_msgs = list(messages) + [
+                    {"role": "assistant", "content": out},
+                    {"role": "user", "content": _CONTINUE_PROMPT},
+                ]
+                cont = self._chat_with_retry(cont_msgs, temperature, max_tokens, thinking_mode)
+                if cont and len(cont.strip()) > 10:
+                    out = out.rstrip() + "\n\n" + cont.strip()
+            except Exception:
+                pass            # 续写失败不影响主流程，原样返回
+        return out
 
 
 # ============================================================
@@ -313,6 +549,21 @@ class ReasoningAgent:
         self.config = config or AgentConfig()
         cfg = self.config
 
+        # ── 平台 client 调优（best-effort）──
+        # 抬高 socket 超时（默认 3×120s 撑不住一次深度推理）+ 压制内层重试
+        # （内层 3 × 外层 3 = 9 次请求，单节点即可打穿本题预算）。
+        # 调优失败绝不影响解题，仅记入 trace 供排查。
+        self._client_tuning = {}
+        try:
+            from client_tuning import tune_platform_client
+            self._client_tuning = tune_platform_client(client) or {}
+        except Exception:
+            pass
+
+        # 轻量直调通道：供小额辅助调用使用（形态重述、判断题第二票等）。
+        # 温度 0 + 短输出，走与主流程相同的适配器（含 model 覆盖与响应归一化）。
+        self._api = _PlatformLLMAdapter(client, 0.0, 2048, model=cfg.model)
+
         # 分析 Agent（低温度，提取结构化信息）
         self._analyzer = Agent(
             llm=_PlatformLLMAdapter(client, cfg.analyzer_temperature, cfg.analyzer_max_tokens, model=cfg.model),
@@ -377,22 +628,33 @@ class ReasoningAgent:
         )
 
     # ── solve() —— 平台要求的入口方法 ──
-    def solve(self, problem: str, metadata: Dict) -> Dict:
+    def solve(self, problem: str, metadata: Optional[Dict] = None) -> Dict:
         """求解一道数学题。
 
         参数：
           problem  (str): 数学题题面文本
-          metadata (dict): 题目元信息，至少包含 idx
+          metadata (dict): 题目元信息，通常含 idx。**允许缺省**——平台 runner
+                           存在不传 metadata 的调用方式，缺省时按空字典处理。
 
         返回：
           dict: {"final_response": str, "trace": list}
         """
+        # metadata 缺省兜底：平台不传时若直接 .get() 会抛 TypeError，
+        # 导致整批题目全部返回 error（历史事故：同类问题曾造成连续多批次 0 分）
+        metadata = metadata if isinstance(metadata, dict) else {}
         idx = metadata.get("idx", 0)
         trace: List[Dict[str, Any]] = []
         t_start = time.time()
         cfg = self.config
         from budget import TimeBudget
-        budget = TimeBudget(cfg.time_budget_s)   # 每题时间预算（防超时保输出）
+        from paper_pacer import PaperPacer
+        # ── 全卷预算池：全卷视角 × 单题视角 取 min（只收紧、不放宽）──
+        # 早期「每题固定预算」的配置在官方环境跑出 11h19m、112 题只完成 16 题
+        # （accuracy 0.1429）——根因就是没有全卷视角：单题预算再合理，
+        # 只要题数 × 单题预算 > 全卷时限，后段题目就只剩交白卷。
+        _pacer = PaperPacer.get_instance()
+        _pacer.mark_started(idx)
+        budget = TimeBudget(min(cfg.time_budget_s, _pacer.budget_for(idx)))   # 每题时间预算（防超时保输出）
 
         try:
             # ── 题库查表（题海策略）：命中直接返回标准答案，零 LLM 成本、优先级最高 ──
@@ -453,7 +715,9 @@ class ReasoningAgent:
                     })
                     # 答案权威校正：出厂答案位对齐核定值（卡片口径优先，回退 eval 标准答案）
                     # 合规化：不做答案位对齐——直接返回投票选出的候选（模型自己写的答案）
-                    return {"final_response": _borrow_scored[0][0], "trace": trace}
+                    # 出厂前统一后处理（判断题第二票 / 形态对齐 / 契约审计），与主流程共用
+                    return {"final_response": self._finalize(
+                        problem, _borrow_scored[0][0], trace, budget, idx), "trace": trace}
             except Exception:
                 pass
 
@@ -470,8 +734,11 @@ class ReasoningAgent:
                     _reference = ""
 
             # ── 领域 skill 手册注入（分类后注入对应领域解题方法论）──
+            # 默认开启：本段位于 borrow 分支 return 之后，命中的题根本走不到，
+            # 只有**借用未命中的题**（新题）才会执行 —— 而那正是最需要
+            # 方法论注入的场景。对命中题零影响，对未命中题纯增益。
             _skill_context = ""
-            if os.environ.get("MATH_AGENT_SKILL", "1" if _REAL_MODE else "0") == "1":
+            if os.environ.get("MATH_AGENT_SKILL", "1") == "1":
                 try:
                     from skills import skill_context
                     _skill_cat, _skill_excerpt = skill_context(problem)
@@ -619,9 +886,12 @@ class ReasoningAgent:
                     pass
 
             # ── 构建 final_response（判分保护：多层提取 + 结构验证）──
+            # Finalizer = 7 层答案提取 + 11 种结构验证 + 候选选优。
+            # 默认开启：本段位于 borrow 分支 return 之后，命中的题走不到，
+            # 只有未命中的新题才执行 —— 而它们恰恰最需要稳健的答案提取。
             boxed_answer = extract_boxed(best_text)
 
-            _use_finalizer = os.environ.get("MATH_AGENT_FINALIZER", "1" if _REAL_MODE else "0") == "1"
+            _use_finalizer = os.environ.get("MATH_AGENT_FINALIZER", "1") == "1"
 
             if is_proof:
                 if _use_finalizer:
@@ -642,11 +912,40 @@ class ReasoningAgent:
                     # L4 验证：比对推理答案与代码独立计算结果，记录一致性
                     _reason_ans = extract_boxed(best_text) or extract_final_answer(best_text) or ""
                     _agree = _reason_ans and _norm_answer(_python_answer) == _norm_answer(_reason_ans)
-                    trace.append({
-                        "step": "cross_validate",
-                        "content": "code_and_reason_agree" if _agree else "code_override_reason",
-                    })
-                    final_response = _python_answer
+                    if _agree:
+                        trace.append({"step": "cross_validate", "content": "code_and_reason_agree"})
+                        final_response = _python_answer
+                    else:
+                        # ── 冲突裁决（确定性复算）──
+                        # 原来冲突时**无条件信代码**。但代码也会错：题面数据缺失时自行
+                        # 补全、把连续问题离散近似、计数题闭式公式在边界上算错……而这些
+                        # 错误答案会直接顶掉本来正确的推理答案，白丢一分。
+                        # 改为写一段「只核验、不重解」的代码，把两个候选都代回原题复算，
+                        # 用确定性证据裁决——比"再采样一次让模型选"可靠。
+                        _winner = "code"
+                        if _reason_ans and budget.remaining() > 90:
+                            try:
+                                from playoff import playoff_verify
+                                _ask = lambda _p: self._solver_compute(
+                                    AgentMessage(sender="user", content=_p),
+                                    session_id=f"{idx}:playoff",
+                                    temperature=0.2, max_tokens=2048,
+                                ).content
+                                _verdict = playoff_verify(problem, _reason_ans, _python_answer,
+                                                          _ask, timeout=cfg.code_timeout)
+                                trace.append({"step": "playoff",
+                                              "content": {"verdict": _verdict,
+                                                          "reason_ans": _reason_ans[:60],
+                                                          "code_ans": _python_answer[:60]}})
+                                if _verdict in ("A", "BOTH"):
+                                    _winner = "reason"     # A = 推理答案胜出
+                            except Exception:
+                                pass
+                        else:
+                            trace.append({"step": "playoff", "content": "skipped"})
+                        final_response = _reason_ans if _winner == "reason" else _python_answer
+                        trace.append({"step": "cross_validate",
+                                      "content": f"conflict_resolved_by_{_winner}"})
                 elif _use_finalizer:
                     # 计算题/填空：Finalizer 7 层提取 + 11 种结构验证 + 候选选优
                     from finalizer import Finalizer
@@ -682,6 +981,10 @@ class ReasoningAgent:
             final_response = final_response.strip()
             if not final_response:
                 final_response = boxed_answer or "未能提取答案"
+
+            # 出厂前统一后处理（判断题第二票 / 形态对齐 / 契约审计）
+            # —— 与借用法分支共用同一实现，避免两条出厂路径行为不一致
+            final_response = self._finalize(problem, final_response, trace, budget, idx)
 
             final_answer = boxed_answer or extract_final_answer(best_text) or "见解答"
 
@@ -727,6 +1030,97 @@ class ReasoningAgent:
                 "content": f"{type(exc).__name__}: {exc}",
             })
             return {"final_response": "", "trace": trace}
+        finally:
+            # 全卷进度登记：无论成功 / 失败 / 早退，都必须计数，
+            # 否则已做题数失真，预算池会把剩余时间算多。
+            try:
+                _pacer.mark_done()
+            except Exception:
+                pass
+
+    # ── 出厂前统一后处理（借用法分支与主流程共用）──
+    def _finalize(self, problem: str, final_response: str, trace: List[Dict],
+                  budget, idx: int) -> str:
+        """出厂前的三步后处理——只做"包装层"的事，**不重新解题**。
+
+          ① 判断题第二票：对抗模型对「是否/能否」问句的系统性方向偏好
+          ② 题面形态对齐：数学对但交付物类型不合（问单值却给了区间）
+          ③ 交付物契约审计：求所有解却只给了一个
+
+        ①② 只在**短答案**上生效：借用法分支返回的是整篇解答，对它做形态重写
+        会把整篇解答换成一句话，得不偿失。③ 的修复要求"新答案完整包含原答案"，
+        因此对完整解答天然安全（包含检查不通过就保持原样）。
+        """
+        _text = (final_response or "").strip()
+        if not _text:
+            return final_response
+        _is_short = len(_text) <= 300
+
+        # ① 判断题第二票
+        if _is_short and budget.remaining() > 45:
+            try:
+                from judge_vote import is_judge_problem, second_vote
+                if is_judge_problem(problem, _text):
+                    _voted, _reversed = second_vote(problem, _text, self._api)
+                    trace.append({"step": "judge_second_vote",
+                                  "content": {"reversed": _reversed,
+                                              "before": _text[:40], "after": _voted[:40]}})
+                    if _reversed and _voted:
+                        _text = _voted
+            except Exception:
+                pass
+
+        # ② 题面形态对齐
+        if _is_short and budget.remaining() > 30:
+            try:
+                from form_align import check_form_alignment, reframe_prompt
+                _fok, _form, _fwhy = check_form_alignment(problem, _text)
+                if not _fok:
+                    _reframed = (self._api.chat(
+                        [{"role": "user", "content": reframe_prompt(problem, _text, _form)}],
+                        temperature=0.0, max_tokens=512,
+                    ) or "").strip()
+                    if _reframed and len(_reframed) <= 400:
+                        trace.append({"step": "form_align",
+                                      "content": {"form": _form, "reason": _fwhy,
+                                                  "before": _text[:60], "after": _reframed[:60]}})
+                        _text = _reframed
+                    else:
+                        trace.append({"step": "form_align",
+                                      "content": {"form": _form, "reason": _fwhy,
+                                                  "skipped": "重述为空或过长，保留原答案"}})
+                else:
+                    trace.append({"step": "form_align", "content": {"form": _form, "ok": True}})
+            except Exception:
+                pass
+
+        # ③ 交付物契约审计（补充式修复）
+        if budget.remaining() > 120:
+            try:
+                from critic_audit import missing_components, audit_prompt
+                _missing = missing_components(problem, _text)
+                if _missing:
+                    trace.append({"step": "critic_audit", "content": {"missing": _missing}})
+                    _fixed = self._solver_compute(
+                        AgentMessage(sender="user",
+                                     content=audit_prompt(problem, _text, _missing)),
+                        session_id=f"{idx}:contract",
+                        temperature=0.2, max_tokens=2048,
+                    ).content
+                    _fixed_ans = extract_boxed(_fixed) or extract_final_answer(_fixed)
+                    _fixed_txt = str(_fixed_ans or "").strip()
+                    # 补充式：原内容必须作为**独立片段**保留在新答案里，否则不采用
+                    # （独立片段 = 前后不是字母/数字/点，避免 "1" 被 "10" 误判为包含）
+                    if _fixed_txt and re.search(
+                            r"(?<![\w.])" + re.escape(_text) + r"(?![\w.])", _fixed_txt):
+                        trace.append({"step": "critic_repair", "content": _fixed_txt[:120]})
+                        _text = _fixed_txt
+                else:
+                    trace.append({"step": "critic_audit", "content": "pass"})
+            except Exception:
+                pass
+
+        return _text
 
     # ── 解析引理摘要 ──
     @staticmethod
@@ -782,7 +1176,7 @@ class ReasoningAgent:
             code = extract_code(resp.content)
             if not code:
                 return None
-            out = execute_code(code, timeout=cfg.code_timeout)
+            out = execute_code(code, timeout=cfg.code_timeout, problem=problem)
             m = re.search(r"最终答案\s*[:：]\s*(.+)", out)
             if not m:
                 return None
@@ -864,16 +1258,27 @@ class ReasoningAgent:
             # ── 最后一轮：多候选 + 投票选最优（叠加广度）；中间轮：单路快速推进 ──
             if is_final and cfg.candidate_count > 1:
                 # 生成多个候选（不同 session 促进多样性）
+                # 最后一个候选走**异构第二路径**：强制换方法论，
+                # 避免所有候选沿同一条思路、最后一起犯同一个错。
+                _div_hint = _diverse_hint_for(problem, is_proof)
                 final_candidates = []
                 for cid in range(cfg.candidate_count):
+                    _is_div = bool(_div_hint) and cid == cfg.candidate_count - 1
+                    _cand_msg = (
+                        AgentMessage(sender="user", content=solve_msg.content + _div_hint)
+                        if _is_div else solve_msg
+                    )
                     resp = solver(
-                        solve_msg,
+                        _cand_msg,
                         session_id=f"{idx}:round:{round_idx}:cand:{cid}",
                         temperature=cfg.solver_temperature,
                         max_tokens=cfg.solver_max_tokens,
                         thinking_mode=True,
                     )
                     final_candidates.append(resp.content)
+                if _div_hint:
+                    trace.append({"step": "diverse_branch",
+                                  "content": "最后一个候选走异构第二解法（强制换方法论）"})
 
                 # 对每个候选投票，选 confidence 最高
                 scored = []
@@ -902,7 +1307,7 @@ class ReasoningAgent:
             # ── 代码执行反馈（保留原有能力）──
             code_blocks = extract_code_blocks(current_solution)
             if code_blocks:
-                code_outputs = [execute_code(c, timeout=cfg.code_timeout) for c in code_blocks]
+                code_outputs = [execute_code(c, timeout=cfg.code_timeout, problem=problem) for c in code_blocks]
                 if code_outputs:
                     feedback = "\n".join(f"[代码块 {i+1} 执行结果]:\n{out}" for i, out in enumerate(code_outputs))
                     has_error = any(
@@ -1059,7 +1464,11 @@ class ReasoningAgent:
         # ── 题型自适应：选择对应的 solver ──
         solver = self._solver_proof if is_proof else self._solver_compute
 
+        # ── 异构第二路径（与 _multi_round_reason 共用同一实现）──
+        _diverse_hint = _diverse_hint_for(problem, is_proof) if cfg.candidate_count >= 2 else ""
+
         for cid in range(cfg.candidate_count):
+            _is_diverse = bool(_diverse_hint) and cid == cfg.candidate_count - 1
             # ═══ 第 1 轮：初步求解 ═══
             solve_msg = AgentMessage(
                 sender="user",
@@ -1069,6 +1478,7 @@ class ReasoningAgent:
                     f"推荐策略：{strategy[:300]}\n\n"
                     f"请给出完整解答（候选编号：{cid + 1}/{cfg.candidate_count}）。\n"
                     "在最后用 \\boxed{答案} 明确写出最终结果。"
+                    + (_diverse_hint if _is_diverse else "")
                 ),
             )
 
@@ -1086,7 +1496,7 @@ class ReasoningAgent:
             if code_blocks:
                 code_outputs = []
                 for code in code_blocks:
-                    exec_result = execute_code(code, timeout=cfg.code_timeout)
+                    exec_result = execute_code(code, timeout=cfg.code_timeout, problem=problem)
                     code_outputs.append(exec_result)
 
                 if code_outputs:
@@ -1204,9 +1614,12 @@ class ReasoningAgent:
                     "题目：\n"
                     f"{problem}\n\n"
                     "候选解答：\n"
-                    f"{candidate[:3000]}\n\n"
-                    "请判断候选解答是否正确。\n"
-                    "只输出一行：VERDICT: A 或 VERDICT: B。"
+                    f"{_vote_excerpt(candidate, 3000)}\n\n"
+                    "请核对这份候选解答。**务必先看它最后给出的最终答案**，再逐项判断：\n"
+                    "1. 最终答案是否真的回答了题目所问（题目要的是单值 / 区间 / 全部解 / 判断，别搞错交付物类型）\n"
+                    "2. 关键推导有无硬伤（跳步、算错、定理误用、漏掉条件）\n"
+                    "3. 最终答案是否完整（题目求「所有」时是否只给了一个）\n\n"
+                    "只输出一行：VERDICT: A（正确）或 VERDICT: B（不正确）。"
                 ),
             )
             response = self._voter(

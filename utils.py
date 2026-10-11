@@ -30,7 +30,7 @@ def extract_code_blocks(text: str) -> list:
     return [code.rstrip('\n') for code in re.findall(r"```python\s*\n(.*?)```", text, re.DOTALL)]
 
 
-def execute_code(code: str, timeout: int = 30) -> str:
+def execute_code(code: str, timeout: int = 30, problem: str = "") -> str:
     """在子进程中安全执行 Python 代码，返回 stdout 或 stderr。
 
     安全策略：
@@ -38,6 +38,11 @@ def execute_code(code: str, timeout: int = 30) -> str:
       - timeout 限制执行时间
       - 仅允许数学计算相关模块（白名单策略）
       - 平台评分环境通常有外层沙箱，此处为额外保险
+      - 确定性守护：计数题必须做小规模枚举对照、模结构题必须显式取模，
+        不合规**不执行**（错误的验证结果比没有验证结果更危险——下游可能
+        拿它去覆盖正确的推理答案）
+
+    参数 problem 传入题面后启用确定性守护；留空则只做安全检查（向后兼容）。
     """
     # 危险模块黑名单检查（防止代码注入或系统破坏）
     _FORBIDDEN_IMPORTS = {'os', 'subprocess', 'shutil', 'socket', 'requests',
@@ -45,6 +50,25 @@ def execute_code(code: str, timeout: int = 30) -> str:
     for word in _FORBIDDEN_IMPORTS:
         if re.search(r'\b' + word + r'\b', code):
             return f'[安全拦截] 代码包含禁止的模块调用: {word}'
+
+    # 反伪造：声称验证通过却没有实质计算的代码不执行（与题面无关，总是检查）
+    try:
+        from guard import authenticity_reason
+        _auth = authenticity_reason(code)
+        if _auth:
+            return f'[反伪造] {_auth}'
+    except Exception:
+        pass
+
+    # 确定性守护（计数 / 模结构）：不合规的代码不执行，改为回灌改写指引
+    if problem:
+        try:
+            from guard import guard_reason
+            _reason = guard_reason(problem, code)
+            if _reason:
+                return f'[守护拦截] {_reason}'
+        except Exception:
+            pass
 
     try:
         r = subprocess.run(

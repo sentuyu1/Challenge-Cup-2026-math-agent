@@ -346,5 +346,51 @@ c = ad4._client.n == 2 and out4.endswith("\\boxed{42")
 ok &= c
 print(f"[9] {'✅' if c else '❌'} 续写失败静默降级（调用 {ad4._client.n} 次，原样返回）")
 
+# ── 10) 预填充（省时 + 杜绝该类调用被截断）──
+from user_agent import _stitch_prefill
+from utils import is_correct_vote
+
+stitch_cases = [
+    ("续写", "VERDICT: ", "A", "VERDICT: A"),
+    ("回显", "VERDICT: ", "VERDICT: B", "VERDICT: B"),
+    ("回显带前置空白", "VERDICT: ", "\nVERDICT: A", "VERDICT: A"),
+    ("空种子", "", "任意内容", "任意内容"),
+]
+for note, seed, comp, want in stitch_cases:
+    got = _stitch_prefill(seed, comp)
+    c = got == want
+    ok &= c
+    print(f"[10] {'✅' if c else '❌'} stitch {note:<14} -> {got!r}（期望 {want!r}）")
+
+
+class _PreClient:
+    def __init__(self, reply):
+        self.reply = reply
+        self.n = 0
+        self.last_msgs = None
+
+    def chat(self, messages, **kw):
+        self.n += 1
+        self.last_msgs = messages
+        return self.reply
+
+
+from user_agent import _PlatformLLMAdapter as _A3
+
+pc = _PreClient("A")
+adp = _A3(pc)
+out = adp.chat_prefilled([{"role": "user", "content": "判断"}], "VERDICT: ")
+c = out == "VERDICT: A" and pc.n == 1
+ok &= c
+print(f"[10] {'✅' if c else '❌'} chat_prefilled 续写拼接 -> {out!r}（调用 {pc.n} 次）")
+
+c = isinstance(pc.last_msgs, list) and pc.last_msgs[-1] == {"role": "assistant", "content": "VERDICT: "}
+ok &= c
+print(f"[10] {'✅' if c else '❌'} 末尾确实追加了 assistant 种子消息")
+
+c = is_correct_vote(out) is True
+ok &= c
+print(f"[10] {'✅' if c else '❌'} 预填充结果可被投票解析 -> {is_correct_vote(out)}")
+
 print("\n" + ("P1 验证全部通过 ✅" if ok else "P1 有失败项 ❌"))
 sys.exit(0 if ok else 1)

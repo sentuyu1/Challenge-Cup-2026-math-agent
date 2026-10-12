@@ -290,6 +290,30 @@ def _looks_truncated(text: str, max_tokens: int) -> bool:
     return False
 
 
+def _stitch_prefill(prefix: str, completion: str) -> str:
+    """把预填充种子与后端返回的续写拼成完整文本。
+
+    不同后端对「末尾追加 assistant 消息」的处理有三种：
+      · 续写（continuation）—— 返回种子之后的部分      → 种 + 返回
+      · 回显（echo）        —— 返回里已经含种子          → 直接用返回
+      · 忽略（ignored）     —— 返回一段独立完整答案      → 直接用返回
+
+    仅靠前缀匹配区分「回显」与「续写」并不可靠（续写也可能恰好以相同字符开头），
+    所以额外接受「返回的靠前位置出现了种子」这一情形。
+    """
+    body = completion if isinstance(completion, str) else str(completion or "")
+    seed = prefix if isinstance(prefix, str) else str(prefix or "")
+    if not seed:
+        return body
+    stripped = body.lstrip()
+    if stripped.startswith(seed):
+        return stripped
+    head = body[: len(seed) + 40]
+    if seed in head:
+        return body[body.index(seed):]
+    return seed + body
+
+
 class _PlatformLLMAdapter:
     """把平台提供的 client 包装成 Lagent 兼容的 LLM 后端。
 
@@ -378,6 +402,29 @@ class _PlatformLLMAdapter:
             except Exception:
                 pass            # 续写失败不影响主流程，原样返回
         return out
+
+    def chat_prefilled(self, messages, prefix: str, temperature: float = 0.0,
+                       max_tokens: int = 64) -> str:
+        """预填充调用：在消息末尾追加 assistant 种子，让模型进入续写模式。
+
+        ════════════════════════════════════════════════════════
+          普通调用   max_tokens=8192 → 40.4s / 1969 tokens
+          预填充     max_tokens=64   →  0.9s /   12 tokens   （58×）
+          （短输出类调用的实测差距，另一种场景达 140×）
+        ════════════════════════════════════════════════════════
+
+        原理：种子把模型置于「续写」状态，它不再开启 reasoning_content 块。
+
+        与「把 max_tokens 调小」有本质区别：思维链先被计费，小上限会在思维中途
+        截断（finish_reason="length"），答案根本没机会输出；预填充是把思维链整个
+        去掉 —— 这也正是线上那 60~80 次截断的成因之一。
+
+        仅适用于**输出极短且格式固定**的调用（如投票的 "VERDICT: A/B"）；
+        长输出（推理、改写）不能走这条路。
+        """
+        msgs = list(messages) + [{"role": "assistant", "content": prefix}]
+        out = self._chat_with_retry(msgs, temperature, max_tokens, self._thinking_mode)
+        return _stitch_prefill(prefix, out)
 
 
 # ============================================================
@@ -734,11 +781,12 @@ class ReasoningAgent:
                     _reference = ""
 
             # ── 领域 skill 手册注入（分类后注入对应领域解题方法论）──
-            # 默认开启：本段位于 borrow 分支 return 之后，命中的题根本走不到，
-            # 只有**借用未命中的题**（新题）才会执行 —— 而那正是最需要
-            # 方法论注入的场景。对命中题零影响，对未命中题纯增益。
+            # ⚠️ 实测回退（2026-10-11 线上评测）：打开后 prompt_tokens 从 1.29M
+            # 涨到 1.97M（+52%），准确率 75 → 73。注入的是「领域知识讲解」而非
+            # 本题的解题线索 —— 它挤占上下文，还可能把模型带向通用套路。
+            # 故恢复为「仅 real 模式开启」。
             _skill_context = ""
-            if os.environ.get("MATH_AGENT_SKILL", "1") == "1":
+            if os.environ.get("MATH_AGENT_SKILL", "1" if _REAL_MODE else "0") == "1":
                 try:
                     from skills import skill_context
                     _skill_cat, _skill_excerpt = skill_context(problem)
@@ -876,8 +924,14 @@ class ReasoningAgent:
             })
 
             # ── 独立 Python 求解（交叉验证：确定性计算 > LLM 推理，仅计算题）──
+            # 默认开启：这是**与推理不相关**的第二条证据链 —— 数值 / 计数 / 矩阵
+            # 这类题，Python 给的是确定性结果，推理算错时它不会跟着错。
+            # 时间账（线上实测 324s/题）：+57% → 509s/题 × 100 题 ÷ 并发 3 ≈ 4.7h，
+            # 仍在 6 小时时限内。（此前因误用本地实测 623s/题而判断为超时，已纠正。）
+            # 关联：本通道开启后，答案冲突时的 playoff 复算裁决、以及 guard
+            # 确定性守护（计数题必须枚举、模结构题必须取模）才会真正生效。
             _python_answer = None
-            if os.environ.get("MATH_AGENT_PYTHON", "1" if _REAL_MODE else "0") == "1" and not is_proof:
+            if os.environ.get("MATH_AGENT_PYTHON", "1") == "1" and not is_proof:
                 try:
                     _python_answer = self._python_solve(problem, idx)
                     if _python_answer:
@@ -1373,17 +1427,13 @@ class ReasoningAgent:
                 # 逐条验证引理，只保留验证通过的
                 verified_lemmas = []
                 for lemma in candidate_lemmas:
-                    verify_msg = AgentMessage(
-                        sender="user",
-                        content=f"引理：{lemma}\n\n请判断这条引理是否正确。",
-                    )
-                    verdict_resp = self._lemma_verifier(
-                        verify_msg,
-                        session_id=f"{idx}:lemma_verify:{round_idx}:{len(verified_lemmas)}",
-                        temperature=0.0,
-                        max_tokens=512,
-                    )
-                    ok = is_correct_vote(verdict_resp.content)
+                    _verdict_text = self._verdict_call(
+                        _PROMPT_LEMMA_VERIFIER,
+                        f"引理：{lemma}\n\n请判断这条引理是否正确。",
+                        self._lemma_verifier,
+                        f"{idx}:lemma_verify:{round_idx}:{len(verified_lemmas)}",
+                        fallback_max_tokens=512)
+                    ok = is_correct_vote(_verdict_text)
                     if ok:
                         verified_lemmas.append(lemma)
                     trace.append({
@@ -1401,20 +1451,16 @@ class ReasoningAgent:
         # ── 最终过程验证 + 修正循环（Intern-S1-MO 的 process verifier）──
         # 最后一轮解答做漏洞检查，FAIL 则反馈修正，最多 1 次
         for fix_round in range(1):
-            verify_msg = AgentMessage(
-                sender="user",
-                content=f"题目：{problem}\n\n解答：{current_solution[:3000]}\n\n请检查是否有漏洞。",
-            )
-            verdict_resp = self._process_verifier(
-                verify_msg,
-                session_id=f"{idx}:process_verify",
-                temperature=0.0,
-                max_tokens=1024,
-            )
-            ok = is_correct_vote(verdict_resp.content)
+            _verdict_text = self._verdict_call(
+                _PROMPT_PROCESS_VERIFIER,
+                f"题目：{problem}\n\n解答：{current_solution[:3000]}\n\n请检查是否有漏洞。",
+                self._process_verifier,
+                f"{idx}:process_verify",
+                fallback_max_tokens=1024)
+            ok = is_correct_vote(_verdict_text)
             trace.append({
                 "step": "process_verify",
-                "content": {"passed": ok, "feedback": verdict_resp.content[:200]},
+                "content": {"passed": ok, "feedback": (_verdict_text or "")[:200]},
             })
 
             if ok:
@@ -1593,6 +1639,37 @@ class ReasoningAgent:
         return candidates, trace
 
     # ── 投票验证 ──
+    def _verdict_call(self, system_prompt: str, prompt: str, agent, session_id: str,
+                      fallback_max_tokens: int = 512, temperature: float = 0.0) -> str:
+        """判定类调用：优先预填充，失败退回常规调用。
+
+        判定类调用的 system prompt 把它限定为一行 `VERDICT: A/B` —— 这是预填充
+        最适用的形态：省掉整条思维链（同 prompt 实测 40s → 1s），且该调用从此
+        不可能因思维链抢占 token 预算而被截断。
+
+        覆盖三处判定调用：候选投票、逐条引理验证、最终过程验证。引理多的一轮
+        会有 3~5 次这类调用，全走预填充能省下可观时间。
+        """
+        try:
+            out = self._api.chat_prefilled(
+                [{"role": "system", "content": system_prompt},
+                 {"role": "user", "content": prompt}],
+                "VERDICT: ", temperature=temperature, max_tokens=64)
+            if re.search(r"VERDICT\s*[:：]\s*[AB]", out or "", re.IGNORECASE):
+                return out
+        except Exception:
+            pass
+        # 退回常规调用（后端拒绝 assistant 结尾 / 返回不成形）
+        try:
+            resp = agent(
+                AgentMessage(sender="user", content=prompt),
+                session_id=session_id, temperature=temperature,
+                max_tokens=fallback_max_tokens,
+            )
+            return resp.content
+        except Exception:
+            return ""
+
     def _vote_on_candidate(
         self, problem: str, candidate: str, idx: int, candidate_id: int
     ) -> Tuple[float, List[Dict]]:
@@ -1608,27 +1685,22 @@ class ReasoningAgent:
         cfg = self.config
 
         for vote_id in range(cfg.vote_count):
-            vote_msg = AgentMessage(
-                sender="user",
-                content=(
-                    "题目：\n"
-                    f"{problem}\n\n"
-                    "候选解答：\n"
-                    f"{_vote_excerpt(candidate, 3000)}\n\n"
-                    "请核对这份候选解答。**务必先看它最后给出的最终答案**，再逐项判断：\n"
-                    "1. 最终答案是否真的回答了题目所问（题目要的是单值 / 区间 / 全部解 / 判断，别搞错交付物类型）\n"
-                    "2. 关键推导有无硬伤（跳步、算错、定理误用、漏掉条件）\n"
-                    "3. 最终答案是否完整（题目求「所有」时是否只给了一个）\n\n"
-                    "只输出一行：VERDICT: A（正确）或 VERDICT: B（不正确）。"
-                ),
+            _vote_prompt = (
+                "题目：\n"
+                f"{problem}\n\n"
+                "候选解答：\n"
+                f"{_vote_excerpt(candidate, 3000)}\n\n"
+                "请核对这份候选解答。**务必先看它最后给出的最终答案**，再逐项判断：\n"
+                "1. 最终答案是否真的回答了题目所问（题目要的是单值 / 区间 / 全部解 / 判断，别搞错交付物类型）\n"
+                "2. 关键推导有无硬伤（跳步、算错、定理误用、漏掉条件）\n"
+                "3. 最终答案是否完整（题目求「所有」时是否只给了一个）\n\n"
+                "只输出一行：VERDICT: A（正确）或 VERDICT: B（不正确）。"
             )
-            response = self._voter(
-                vote_msg,
-                session_id=f"{idx}:vote:{candidate_id}:{vote_id}",
-                temperature=cfg.voter_temperature,
-                max_tokens=cfg.voter_max_tokens,
-            )
-            verdict = response.content
+            verdict = self._verdict_call(
+                _PROMPT_VOTER, _vote_prompt, self._voter,
+                f"{idx}:vote:{candidate_id}:{vote_id}",
+                fallback_max_tokens=cfg.voter_max_tokens,
+                temperature=cfg.voter_temperature)
             is_correct = is_correct_vote(verdict)
             votes.append(is_correct)
 

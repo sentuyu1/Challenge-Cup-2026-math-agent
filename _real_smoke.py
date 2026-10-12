@@ -66,6 +66,23 @@ t0 = time.time()
 agent = ReasoningAgent(client=c)
 print(f"[初始化] client 调优后 timeout={c.timeout} retry={c.retry}")
 
+# ── 预填充探测（几秒钟，决定投票路径走哪条）──
+from user_agent import _PlatformLLMAdapter
+
+_probe_ad = _PlatformLLMAdapter(c, 0.0, 64, model=None)
+_t0 = time.time()
+try:
+    probe = _probe_ad.chat_prefilled(
+        [{"role": "user", "content": "1+1 等于几？只回答一个数字。"}],
+        "答案：", max_tokens=32)
+    _dt = time.time() - _t0
+    _ok = bool(str(probe or "").strip())
+    print(f"[预填充探测] {'✅ 支持' if _ok else '⚠️ 返回为空'}  耗时 {_dt:.1f}s"
+          f"（同 prompt 普通调用约 30~40s）")
+    print(f"[预填充探测] 返回: {str(probe)[:100]!r}")
+except Exception as e:
+    print(f"[预填充探测] ❌ 后端拒绝: {type(e).__name__}: {e}")
+
 try:
     res = agent.solve(PROBLEM, {"idx": 0})
     dt = time.time() - t0

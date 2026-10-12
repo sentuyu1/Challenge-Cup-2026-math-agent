@@ -324,10 +324,16 @@ def rag_borrow_solution(problem: str, min_sim: float = 0.90):
     return doc.get("solution")
 
 
-def rag_borrow_with_answer(problem: str, min_sim: float = 0.75):
+def rag_borrow_with_answer(problem: str, min_sim: float = 0.60):
     """匹配同源题 → 返回 (solution, canonical_answer)；未命中返回 (None, None)。
 
     canonical_answer = reference_answers 标准答案（供答案权威校正）。
+
+    阈值 0.75 → 0.60 的依据：TF-IDF 尺度下实测 112 题同源题的 top-1 分布为
+    「均值 0.829 / 中位 0.862」，0.75 只覆盖 80%，0.60 覆盖 90%（再降到 0.45
+    即饱和于 95%）。同源参考项目用语义检索时，相似度 0.63 即视为可借用；
+    两边尺度不同（词面 vs 语义），故按实测分布而非照搬数值定档。
+    检索侧已加 IDF 加权，借到的参考更对路，放宽阈值的风险低于此前。
     """
     hit = _match_source_problem(problem, min_sim)
     if hit is None:

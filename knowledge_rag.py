@@ -48,6 +48,23 @@ def tf_vec(s: str):
     return {w: c[w] / m for w in c}
 
 
+def _tfidf_vec(s: str, idf: dict):
+    """TF-IDF 向量：TF 归一化后再乘 IDF 权重。
+
+    纯 TF 的问题：数学题里 "the / and / for / show that / prove that" 到处出现，
+    权重却和 "collinear / divisible / regions" 这些真正有区分度的词一样。
+    结果是检索出的"相似题"常常是**措辞像但数学内容无关**的题 —— 而这类参考
+    恰恰最容易误导模型（宁可少给参考，也不要给错的参考）。
+
+    IDF = log(N / (1 + df)) + 1，平滑 +1 保证常见词不被压到 0。
+    """
+    c = Counter(tokens(s))
+    if not c:
+        return {}
+    m = max(c.values())
+    return {w: (c[w] / m) * idf.get(w, 1.0) for w in c}
+
+
 def _cos(a, b):
     dot = sum(a.get(k, 0) * b.get(k, 0) for k in a)
     na = math.sqrt(sum(v * v for v in a.values()))
@@ -104,24 +121,41 @@ class KnowledgeRag:
         self.min_sim = min_sim
         self.top_k = top_k
         self._docs = []       # 全量 doc（对齐 _vecs）
-        self._vecs = []       # 英文 TF 向量（中文 doc 位置为空 dict，cos 自然为 0）
+        self._vecs = []       # 英文 TF-IDF 向量（中文 doc 位置为空 dict，cos 自然为 0）
         self._cn_docs = []    # 中文 doc（Jaccard 用）
         self._cn_norms = []   # 中文 problem 预 norm（避免重复规范化）
+        self._idf = {}        # 词 -> IDF 权重（构建时统计）
         self._built = False
 
     def _build(self):
         if self._built:
             return
+        # ── 第一遍：统计文档频次，算 IDF（只保留计数，不驻留全文）──
+        dfs = Counter()
+        n_en = 0
+        with open(_BANK, encoding="utf-8") as f:
+            for line in f:
+                p = json.loads(line).get("problem", "")
+                if re.search(r"[一-鿿]", p):
+                    continue
+                n_en += 1
+                for w in set(tokens(p)):
+                    dfs[w] += 1
+        n_en = max(1, n_en)
+        self._idf = {w: math.log(n_en / (1.0 + df)) + 1.0 for w, df in dfs.items()}
+
+        # ── 第二遍：用 IDF 构建 TF-IDF 向量 ──
         with open(_BANK, encoding="utf-8") as f:
             for line in f:
                 r = json.loads(line)
                 self._docs.append(r)
-                if re.search(r"[一-鿿]", r.get("problem", "")):
+                p = r.get("problem", "")
+                if re.search(r"[一-鿿]", p):
                     self._cn_docs.append(r)
-                    self._cn_norms.append(_cn_norm(r.get("problem", "")))
+                    self._cn_norms.append(_cn_norm(p))
                     self._vecs.append({})  # 中文 doc 无 TF 向量（占位对齐）
                 else:
-                    self._vecs.append(tf_vec(r.get("problem", "")))
+                    self._vecs.append(_tfidf_vec(p, self._idf))
         self._built = True
 
     def retrieve(self, problem: str, min_sim=None, top_k=None):
@@ -135,7 +169,7 @@ class KnowledgeRag:
             self._build()
         except Exception:
             return []
-        tv = tf_vec(problem)
+        tv = _tfidf_vec(problem, self._idf)   # 查询侧同样按 IDF 加权
         if not tv:
             return []
         scored = []

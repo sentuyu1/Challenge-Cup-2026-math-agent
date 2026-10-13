@@ -28,6 +28,7 @@ knowledge_rag.py — 知识检索层：题库相似题检索（RAG）
 
 import json
 import math
+import threading
 import os
 import re
 from collections import Counter
@@ -117,6 +118,14 @@ _ANTI_ANCHOR_NOTE = (
 class KnowledgeRag:
     """全量题库（28096 题）的相似检索器（内存索引，惰性构建）。"""
 
+    #: 构建锁。平台并发 3 —— 没有锁时，三个线程会**同时**通过 `if self._built`
+    #: 检查、各自把 28096 条索引建一遍，导致：
+    #:   · 内存 ×3（28096 个向量的三份拷贝）
+    #:   · self._docs / self._vecs 被 append 三遍，文档与向量错位
+    #:   · 构建耗时 ×3，把并发窗口进一步拉长
+    #: 实测（本地复现）：三线程并发首次检索 → docs=84288（= 28096 × 3）。
+    _BUILD_LOCK = threading.Lock()
+
     def __init__(self, min_sim: float = 0.80, top_k: int = 2):
         self.min_sim = min_sim
         self.top_k = top_k
@@ -130,33 +139,36 @@ class KnowledgeRag:
     def _build(self):
         if self._built:
             return
-        # ── 第一遍：统计文档频次，算 IDF（只保留计数，不驻留全文）──
-        dfs = Counter()
-        n_en = 0
-        with open(_BANK, encoding="utf-8") as f:
-            for line in f:
-                p = json.loads(line).get("problem", "")
-                if re.search(r"[一-鿿]", p):
-                    continue
-                n_en += 1
-                for w in set(tokens(p)):
-                    dfs[w] += 1
-        n_en = max(1, n_en)
-        self._idf = {w: math.log(n_en / (1.0 + df)) + 1.0 for w, df in dfs.items()}
+        with self._BUILD_LOCK:
+            if self._built:          # 双检：等锁期间可能已被别的线程建好
+                return
+            # ── 第一遍：统计文档频次，算 IDF（只保留计数，不驻留全文）──
+            dfs = Counter()
+            n_en = 0
+            with open(_BANK, encoding="utf-8") as f:
+                for line in f:
+                    p = json.loads(line).get("problem", "")
+                    if re.search(r"[一-鿿]", p):
+                        continue
+                    n_en += 1
+                    for w in set(tokens(p)):
+                        dfs[w] += 1
+            n_en = max(1, n_en)
+            self._idf = {w: math.log(n_en / (1.0 + df)) + 1.0 for w, df in dfs.items()}
 
-        # ── 第二遍：用 IDF 构建 TF-IDF 向量 ──
-        with open(_BANK, encoding="utf-8") as f:
-            for line in f:
-                r = json.loads(line)
-                self._docs.append(r)
-                p = r.get("problem", "")
-                if re.search(r"[一-鿿]", p):
-                    self._cn_docs.append(r)
-                    self._cn_norms.append(_cn_norm(p))
-                    self._vecs.append({})  # 中文 doc 无 TF 向量（占位对齐）
-                else:
-                    self._vecs.append(_tfidf_vec(p, self._idf))
-        self._built = True
+            # ── 第二遍：用 IDF 构建 TF-IDF 向量 ──
+            with open(_BANK, encoding="utf-8") as f:
+                for line in f:
+                    r = json.loads(line)
+                    self._docs.append(r)
+                    p = r.get("problem", "")
+                    if re.search(r"[一-鿿]", p):
+                        self._cn_docs.append(r)
+                        self._cn_norms.append(_cn_norm(p))
+                        self._vecs.append({})  # 中文 doc 无 TF 向量（占位对齐）
+                    else:
+                        self._vecs.append(_tfidf_vec(p, self._idf))
+            self._built = True
 
     def retrieve(self, problem: str, min_sim=None, top_k=None):
         """返回 [(similarity, doc), ...]，按相似度降序，低于阈值的不返回。
@@ -198,6 +210,22 @@ class KnowledgeRag:
 
 
 _rag = None
+_rag_init_lock = threading.Lock()
+
+
+def _get_rag() -> "KnowledgeRag":
+    """线程安全的全局单例。
+
+    平台并发 3：原来 4 处都是 `if _rag is None: _rag = KnowledgeRag()`，
+    并发时会各自看到 None、创建出多个实例 —— 每个实例都会把 28096 条
+    索引完整建一遍（类级构建锁只能串行化，不能阻止重复构建）。
+    """
+    global _rag
+    if _rag is None:
+        with _rag_init_lock:
+            if _rag is None:
+                _rag = KnowledgeRag()
+    return _rag
 
 
 def rag_reference_block(problem: str, min_sim: float = 0.80) -> str:
@@ -205,9 +233,7 @@ def rag_reference_block(problem: str, min_sim: float = 0.80) -> str:
 
     min_sim：相似度阈值。同源场景 0.80 防误迁移；新题借方法可放宽（如 0.5）。
     """
-    global _rag
-    if _rag is None:
-        _rag = KnowledgeRag()
+    _get_rag()
     return _rag.build_reference_block(problem, min_sim=min_sim)
 
 
@@ -253,9 +279,7 @@ def _match_cn_problem(problem: str, margin: float = 0.05):
     中文题 TF 词频不可靠，改用字符 bigram Jaccard。用预计算的 _cn_norms（只扫中文题，
     避免对全量 2 万重复规范化）。验证 25/25 中文题 top-1 均为自身，margin=0.05 安全。
     """
-    global _rag
-    if _rag is None:
-        _rag = KnowledgeRag()
+    _get_rag()
     try:
         _rag._build()
     except Exception:
@@ -280,9 +304,7 @@ def _match_cn_problem(problem: str, margin: float = 0.05):
 
 def _match_source_problem(problem: str, min_sim: float = 0.90):
     """匹配同源题，返回 (sim, doc) 或 None。英文 TF 余弦，中文 bigram Jaccard。"""
-    global _rag
-    if _rag is None:
-        _rag = KnowledgeRag()
+    _get_rag()
     try:
         _rag._build()
     except Exception:
@@ -348,7 +370,5 @@ def rag_reference_for_query(query: str, min_sim: float = 0.35, top_k: int = 3) -
     难题/复杂题用：蒸馏出结构描述 → 用结构词检索「结构相近」的题 → 借其解法/方法策略。
     新题（非同源）场景，min_sim 放宽（结构词与题面措辞不同）。
     """
-    global _rag
-    if _rag is None:
-        _rag = KnowledgeRag()
+    _get_rag()
     return _rag.build_reference_block(query, min_sim=min_sim, top_k=top_k)

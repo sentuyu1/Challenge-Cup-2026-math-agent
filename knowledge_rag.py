@@ -239,16 +239,26 @@ def rag_reference_block(problem: str, min_sim: float = 0.80) -> str:
 
 _EVAL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "reference_answers.json")
 _answer_map = None
+_answer_map_lock = threading.Lock()
 
 
 def _load_answer_map():
-    """idx -> 标准答案（从 reference_answers.json）。"""
+    """idx -> 标准答案（从 reference_answers.json）。
+
+    加锁原因：原实现先把 `_answer_map` 赋成空 dict、再逐条填充，另一线程在
+    此期间看到"非 None"就会直接返回**空的 map**（半成品可见）。当前调用方
+    只取 solution、不用 canonical_answer，故无实际影响；但同类竞态已在索引
+    构建上炸过一次，一并按"构建完再发布"的方式修掉。
+    """
     global _answer_map
     if _answer_map is None:
-        _answer_map = {}
-        with open(_EVAL, encoding="utf-8") as f:
-            for item in json.load(f):
-                _answer_map[item["idx"]] = item["answer"]
+        with _answer_map_lock:
+            if _answer_map is None:
+                m = {}
+                with open(_EVAL, encoding="utf-8") as f:
+                    for item in json.load(f):
+                        m[item["idx"]] = item["answer"]
+                _answer_map = m          # 构建完成后一次性发布
     return _answer_map
 
 
